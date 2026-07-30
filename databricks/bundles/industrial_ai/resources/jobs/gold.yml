@@ -1,0 +1,23 @@
+resources:
+  jobs:
+    industrial_ai_gold_job:
+      name: "Industrial AI Gold Aggregation Job"
+      tasks:
+        - task_key: gold_aggregate
+          notebook_task:
+            notebook_path: ../../notebooks/gold/aggregate_devices.py
+            source: WORKSPACE
+          job_cluster_key: industrial_ai_cluster
+        - task_key: gold_health
+          depends_on:
+            - task_key: gold_aggregate
+          notebook_task:
+            notebook_path: ../../notebooks/gold/device_health.py
+            source: WORKSPACE
+          job_cluster_key: industrial_ai_cluster
+      job_clusters:
+        - job_cluster_key: industrial_ai_cluster
+          new_cluster:
+            spark_version: "15.4.x-scala2.12"
+            node_type_id: "Standard_DS3_v2"
+            num_workers: 2

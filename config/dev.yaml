@@ -1,0 +1,7 @@
+environment: "dev"
+workspace_id: "7405619577623735"
+databricks_host: "https://adb-7405619577623735.15.azuredatabricks.net"
+catalog_name: "dbw_industrial_ai_dev_7405619577623735"
+storage_account_name: "stindustrialaidev2026"
+eventhub_namespace: "evhns-industrial-ai-dev"
+eventhub_name: "evh-industrial-ai-dev"

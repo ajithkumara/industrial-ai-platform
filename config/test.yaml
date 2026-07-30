@@ -1,0 +1,7 @@
+environment: "test"
+workspace_id: "test-workspace-id"
+databricks_host: "https://adb-test.azuredatabricks.net"
+catalog_name: "dbw_industrial_ai_test"
+storage_account_name: "stindustrialaitest"
+eventhub_namespace: "evhns-industrial-ai-test"
+eventhub_name: "evh-industrial-ai-test"

@@ -1,0 +1,173 @@
+azure-telemetry-platform/
++-- .env
++-- .gitignore
++-- README.md
++-- apps
+|   +-- consumer
+|   |   +-- __init__.py
+|   |   +-- batch_buffer.py
+|   |   +-- checkpoint.py
+|   |   +-- consumer.py
+|   |   +-- debug_receive.py
+|   |   +-- eventhub_consumer.py
+|   |   \\-- storage_client.py
+|   \\-- producer
+|       +-- __init__.py
+|       +-- eventhub_producer.py
+|       +-- producer.py
+|       \\-- telemetry_simulator.py
++-- config
+|   +-- .gitkeep
+|   +-- __init__.py
+|   +-- dev.yaml
+|   +-- logging.py
+|   +-- prod.yaml
+|   +-- settings.py
+|   \\-- test.yaml
++-- databricks
+|   +-- .databricks
+|   |   +-- .gitignore
+|   |   \\-- bundle
+|   |       \\-- dev
+|   |           +-- .internal
+|   |           +-- deployment.json
+|   |           +-- resources.json
+|   |           \\-- sync-snapshots
+|   |               \\-- 48da35cda08017af.json
+|   +-- bundles
+|   |   \\-- industrial_ai
+|   |       +-- databricks.yml
+|   |       \\-- resources
+|   |           +-- jobs
+|   |           |   +-- bronze.yml
+|   |           +-- gold.yml
+|   |           \\-- silver.yml
+|   |           \\-- pipelines
+|   |               \\-- dlt.yml
+|   +-- notebooks
+|   |   +-- bronze
+|   |   |   +-- ingest_eventhub.py
+|   |   |   \\-- validate_schema.py
+|   |   +-- gold
+|   |   |   +-- aggregate_devices.py
+|   |   |   \\-- device_health.py
+|   |   \\-- silver
+|   |       +-- clean_data.py
+|   |       \\-- deduplicate.py
+|   \\-- sql
+|       +-- catalogs.sql
+|       +-- grants.sql
+|       \\-- schemas.sql
++-- docs
+|   +-- .gitkeep
+|   +-- architecture
+|   |   +-- .gitkeep
+|   |   \\-- README.md
+|   \\-- terraform.md
++-- local
+|   \\-- checkpoints.json
++-- requirements.txt
++-- screenshots
+|   \\-- .gitkeep
++-- scripts
+|   \\-- .gitkeep
++-- shared
+|   +-- config.py
+|   +-- constants.py
+|   +-- helpers.py
+|   +-- schemas.py
+|   \\-- telemetry.py
++-- terraform
+|   +-- bootstrap
+|   |   +-- main.tf
+|   |   +-- outputs.tf
+|   |   +-- providers.tf
+|   |   +-- variables.tf
+|   |   \\-- versions.tf
+|   +-- environments
+|   |   +-- dev
+|   |   |   +-- .terraform.lock.hcl
+|   |   |   +-- backend.hcl
+|   |   |   +-- backend.tf
+|   |   |   +-- main.tf
+|   |   |   +-- outputs.tf
+|   |   |   +-- providers.tf
+|   |   |   +-- terraform.tfvars
+|   |   |   +-- variables.tf
+|   |   |   \\-- versions.tf
+|   |   +-- prod
+|   |   |   +-- backend.hcl
+|   |   |   +-- backend.tf
+|   |   |   +-- main.tf
+|   |   |   +-- outputs.tf
+|   |   |   +-- providers.tf
+|   |   |   +-- terraform.tfvars
+|   |   |   +-- variables.tf
+|   |   |   \\-- versions.tf
+|   |   \\-- test
+|   |       +-- backend.hcl
+|   |       +-- backend.tf
+|   |       +-- main.tf
+|   |       +-- outputs.tf
+|   |       +-- providers.tf
+|   |       +-- terraform.tfvars
+|   |       +-- variables.tf
+|   |       \\-- versions.tf
+|   +-- modules
+|   |   +-- access_connector
+|   |   |   +-- main.tf
+|   |   |   +-- outputs.tf
+|   |   |   \\-- variables.tf
+|   |   +-- databricks
+|   |   |   +-- main.tf
+|   |   |   +-- outputs.tf
+|   |   |   +-- variables.tf
+|   |   |   \\-- versions.tf
+|   |   +-- eventhub
+|   |   |   +-- main.tf
+|   |   |   +-- outputs.tf
+|   |   |   \\-- variables.tf
+|   |   +-- modules
+|   |   +-- monitoring
+|   |   |   +-- main.tf
+|   |   |   +-- outputs.tf
+|   |   |   \\-- variables.tf
+|   |   +-- rbac
+|   |   |   +-- main.tf
+|   |   |   \\-- variables.tf
+|   |   +-- resource_group
+|   |   |   +-- main.tf
+|   |   |   +-- outputs.tf
+|   |   |   \\-- variables.tf
+|   |   +-- storage
+|   |   |   +-- main.tf
+|   |   |   +-- outputs.tf
+|   |   |   \\-- variables.tf
+|   |   \\-- unity_catalog
+|   |       +-- catalog.tf
+|   |       +-- external_location.tf
+|   |       +-- grants.tf
+|   |       +-- schema.tf
+|   |       +-- storage_credential.tf
+|   |       +-- variables.tf
+|   |       \\-- versions.tf
+|   +-- terraform.tfstate
+|   \\-- unity_catalog
+|       \\-- dev
+|           +-- .terraform.lock.hcl
+|           +-- main.tf
+|           +-- providers.tf
+|           +-- terraform.tfvars
+|           +-- variables.tf
+|           \\-- versions.tf
++-- test_config.py
++-- test_consumer.py
++-- test_eventhub.py
++-- test_send.py
++-- test_settings.py
++-- tests
+|   \\-- __init__.py
++-- tree.txt
+\\-- utils
+    +-- __init__.py
+    \\-- logger.py

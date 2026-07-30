@@ -1,6 +1,6 @@
 # Terraform Infrastructure Documentation
 
-This document explains the modular, multi-environment Infrastructure as Code (IaC) architecture of the Azure Telemetry Platform.
+This document explains the modular, multi-environment Infrastructure as Code (IaC) architecture of the Azure Industrial AI Platform.
 
 ---
 
@@ -42,7 +42,7 @@ All resources are partitioned into self-contained modules located in the `terraf
 
 We use standard inputs to generate predictable resource names, preventing name collisions across environments:
 
-* `project_name` (e.g., `telemetry`)
+* `project_name` (e.g., `industrial-ai`)
 * `environment` (e.g., `dev`, `test`, `prod`)
 * `location` (e.g., `canadacentral`)
 
@@ -56,11 +56,11 @@ locals {
 ```
 
 This enforces consistent naming conventions:
-* Resource Group: `rg-telemetry-dev`
-* Storage Account: `sttelemetrydev`
-* Event Hub Namespace: `ehns-telemetry-dev`
-* Databricks Workspace: `dbw-telemetry-dev`
-* Databricks Access Connector: `dbac-telemetry-dev`
+* Resource Group: `rg-industrial-ai-dev`
+* Storage Account: `stindustrialaidev`
+* Event Hub Namespace: `ehns-industrial-ai-dev`
+* Databricks Workspace: `dbw-industrial-ai-dev`
+* Databricks Access Connector: `dbac-industrial-ai-dev`
 
 ---
 

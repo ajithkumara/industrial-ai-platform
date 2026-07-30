@@ -1,4 +1,4 @@
-from config.logging_config import configure_logging
+from config.logging import configure_logging
 
 configure_logging()
 

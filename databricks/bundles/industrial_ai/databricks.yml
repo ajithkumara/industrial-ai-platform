@@ -1,0 +1,17 @@
+bundle:
+  name: azure-industrial-ai-platform
+
+include:
+  - resources/**/*.yml
+
+workspace:
+  host: https://adb-7405619577623735.15.azuredatabricks.net
+  profile: canada-central-dev
+
+targets:
+  dev:
+    mode: development
+    default: true
+
+  prod:
+    mode: production

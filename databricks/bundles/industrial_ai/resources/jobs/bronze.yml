@@ -1,0 +1,23 @@
+resources:
+  jobs:
+    industrial_ai_bronze_job:
+      name: "Industrial AI Bronze Ingestion Job"
+      tasks:
+        - task_key: bronze_ingestion
+          notebook_task:
+            notebook_path: ../../notebooks/bronze/ingest_eventhub.py
+            source: WORKSPACE
+          job_cluster_key: industrial_ai_cluster
+        - task_key: bronze_validation
+          depends_on:
+            - task_key: bronze_ingestion
+          notebook_task:
+            notebook_path: ../../notebooks/bronze/validate_schema.py
+            source: WORKSPACE
+          job_cluster_key: industrial_ai_cluster
+      job_clusters:
+        - job_cluster_key: industrial_ai_cluster
+          new_cluster:
+            spark_version: "15.4.x-scala2.12"
+            node_type_id: "Standard_DS3_v2"
+            num_workers: 2

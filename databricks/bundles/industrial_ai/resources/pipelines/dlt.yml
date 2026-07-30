@@ -1,0 +1,30 @@
+resources:
+  pipelines:
+    industrial_ai_dlt_pipeline:
+      name: "Azure Industrial AI DLT Pipeline"
+
+      catalog: "dbw_industrial_ai_dev_7405619577623735"
+      target: silver
+
+      development: true
+      continuous: false
+      photon: true
+
+      libraries:
+        - notebook:
+            path: ../../notebooks/bronze/ingest_eventhub.py
+        - notebook:
+            path: ../../notebooks/silver/clean_data.py
+        - notebook:
+            path: ../../notebooks/gold/aggregate_devices.py
+
+      serverless: true
+
+      configuration:
+        bronze_path: "abfss://datalake@stindustrialaidev2026.dfs.core.windows.net/bronze"
+        # Neutralise any stale workspace-level account-key configs for both storage accounts.
+        # Unity Catalog External Location (via Access Connector MSI) is the correct auth path.
+        spark.hadoop.fs.azure.account.auth.type.stindustrialaidev2026.dfs.core.windows.net: "OAuth"
+        spark.hadoop.fs.azure.account.oauth.provider.type.stindustrialaidev2026.dfs.core.windows.net: "org.apache.hadoop.fs.azurebfs.oauth2.MsiTokenProvider"
+        spark.hadoop.fs.azure.account.auth.type.stmscaidev2026.dfs.core.windows.net: "OAuth"
+        spark.hadoop.fs.azure.account.oauth.provider.type.stmscaidev2026.dfs.core.windows.net: "org.apache.hadoop.fs.azurebfs.oauth2.MsiTokenProvider"

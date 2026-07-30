@@ -1,7 +1,0 @@
-# conf/ — Environment configuration files for the Databricks bundle.
-#
-# Place environment-specific variable overrides here, for example:
-#   dev.yml   — development workspace settings
-#   prod.yml  — production workspace settings
-#
-# These files are referenced by the bundle targets defined in databricks.yml.

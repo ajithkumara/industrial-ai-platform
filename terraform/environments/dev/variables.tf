@@ -1,7 +1,7 @@
 variable "project_name" {
   type        = string
   description = "The name of the project."
-  default     = "telemetry"
+  default     = "industrial-ai"
 }
 
 variable "environment" {
@@ -20,7 +20,7 @@ variable "tags" {
   type        = map(string)
   description = "A mapping of tags to assign to the resource."
   default = {
-    Project     = "Azure Telemetry Platform"
+    Project     = "Industrial AI Platform"
     ManagedBy   = "Terraform"
     Environment = "dev"
   }

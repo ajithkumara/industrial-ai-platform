@@ -1,9 +1,9 @@
-project_name = "telemetry"
+project_name = "industrial-ai"
 environment  = "dev"
 location     = "canadacentral"
 
 tags = {
-  Project     = "Azure Telemetry Platform"
+  Project     = "Industrial AI Platform"
   ManagedBy   = "Terraform"
   Environment = "dev"
 }
