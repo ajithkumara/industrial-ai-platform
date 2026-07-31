@@ -9,11 +9,11 @@ from __future__ import annotations
 import logging
 import time
 
-from producer.telemetry_simulator import (
+from .telemetry_simulator import (
     VehicleTelemetryGenerator
 )
 
-from producer.eventhub_producer import (
+from .eventhub_producer import (
     EventHubProducer
 )
 

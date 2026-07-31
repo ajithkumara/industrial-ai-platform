@@ -22,9 +22,9 @@ from config.settings import (
     LOGS_DIR,
     settings,
 )
-from consumer.batch_buffer import BatchBuffer
-from consumer.checkpoint import FileCheckpointManager
-from consumer.storage_client import StorageClient
+from .batch_buffer import BatchBuffer
+from .checkpoint import FileCheckpointManager
+from .storage_client import StorageClient
 from shared.telemetry import TelemetryRecord
 from utils.logger import setup_logger
 
