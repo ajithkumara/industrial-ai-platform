@@ -42,6 +42,7 @@ class StorageClient:
     """
 
     RAW_FOLDER: Final[str] = "bronze"
+    DLQ_FOLDER: Final[str] = "bronze/_dlq"
 
     def __init__(self) -> None:
 
@@ -75,13 +76,14 @@ class StorageClient:
 
     # ----------------------------------------------------------
 
-    def _build_directory(self) -> str:
+    def _build_directory(self, base_folder: str | None = None) -> str:
 
         now = self._utc_now()
+        folder = base_folder if base_folder is not None else self.RAW_FOLDER
 
         return str(
             PurePosixPath(
-                self.RAW_FOLDER,
+                folder,
                 f"year={now.year}",
                 f"month={now.month:02}",
                 f"day={now.day:02}",
@@ -90,7 +92,7 @@ class StorageClient:
 
     # ----------------------------------------------------------
 
-    def _build_filename(self) -> str:
+    def _build_filename(self, prefix: str = "telemetry", ext: str = "jsonl") -> str:
 
         now = self._utc_now()
 
@@ -98,7 +100,7 @@ class StorageClient:
 
         unique = uuid.uuid4().hex[:8]
 
-        return f"telemetry_{timestamp}_{unique}.jsonl"
+        return f"{prefix}_{timestamp}_{unique}.{ext}"
 
     # ----------------------------------------------------------
 
@@ -118,12 +120,21 @@ class StorageClient:
 
     # ----------------------------------------------------------
 
+    def _ensure_directory(self, directory: str) -> None:
+        """Create the ADLS directory if it does not already exist."""
+        try:
+            self.file_system.get_directory_client(directory).create_directory()
+        except Exception:
+            pass  # Directory already exists — safe to continue
+
+    # ----------------------------------------------------------
+
     def upload_batch(
         self,
         events: list[dict],
     ) -> str:
         """
-        Upload a telemetry batch to ADLS Gen2.
+        Upload a telemetry batch to ADLS Gen2 Bronze container.
 
         Parameters
         ----------
@@ -139,44 +150,80 @@ class StorageClient:
         if not events:
             raise ValueError("Telemetry batch is empty.")
 
-        directory = self._build_directory()
-
-        filename = self._build_filename()
-
-        file_path = str(
-            PurePosixPath(
-                directory,
-                filename,
-            )
-        )
+        directory = self._build_directory(self.RAW_FOLDER)
+        filename = self._build_filename(prefix="telemetry", ext="jsonl")
+        file_path = str(PurePosixPath(directory, filename))
 
         logger.info(
             "Uploading %d telemetry event(s)...",
             len(events),
         )
 
-        directory_client = (
-            self.file_system.get_directory_client(directory)
-        )
+        self._ensure_directory(directory)
 
-        try:
-            directory_client.create_directory()
-        except Exception:
-            # Directory probably already exists
-            pass
-
-        file_client = (
-            self.file_system.get_file_client(file_path)
-        )
-
+        file_client = self.file_system.get_file_client(file_path)
         file_client.upload_data(
             self._events_to_jsonl(events),
             overwrite=True,
         )
 
-        logger.info(
-            "Successfully uploaded '%s'",
+        logger.info("Successfully uploaded '%s'", file_path)
+
+        return file_path
+
+    # ----------------------------------------------------------
+
+    def write_to_dlq(self, raw_body: str, error_reason: str) -> str:
+        """
+        Write a failed / invalid event to the Dead Letter Queue (DLQ).
+
+        The DLQ lives at ``bronze/_dlq/year=.../month=.../day=.../``
+        so it is partitioned identically to the main Bronze data but
+        physically isolated for easy discovery and replay.
+
+        Each DLQ file is a single JSON object containing:
+        - ``raw_body``     – the original Event Hub message as received
+        - ``error_reason`` – the validation / parsing error description
+        - ``dlq_timestamp``– UTC timestamp of when the event was rejected
+
+        Parameters
+        ----------
+        raw_body : str
+            The raw Event Hub message body that failed validation.
+        error_reason : str
+            Human-readable description of why the event was rejected.
+
+        Returns
+        -------
+        str
+            Uploaded ADLS DLQ file path.
+        """
+
+        directory = self._build_directory(self.DLQ_FOLDER)
+        filename = self._build_filename(prefix="dlq", ext="json")
+        file_path = str(PurePosixPath(directory, filename))
+
+        dlq_record = json.dumps(
+            {
+                "raw_body": raw_body,
+                "error_reason": error_reason,
+                "dlq_timestamp": self._utc_now().isoformat(),
+            },
+            ensure_ascii=False,
+            indent=2,
+        ).encode("utf-8")
+
+        logger.warning(
+            "Writing rejected event to DLQ: '%s' | Reason: %s",
             file_path,
+            error_reason,
         )
+
+        self._ensure_directory(directory)
+
+        file_client = self.file_system.get_file_client(file_path)
+        file_client.upload_data(dlq_record, overwrite=True)
+
+        logger.info("DLQ event written to '%s'", file_path)
 
         return file_path

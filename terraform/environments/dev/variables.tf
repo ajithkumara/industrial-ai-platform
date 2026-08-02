@@ -25,3 +25,10 @@ variable "tags" {
     Environment = "dev"
   }
 }
+
+variable "databricks_principal" {
+  type        = string
+  description = "The principal (user or group) to grant Unity Catalog permissions to. Defaults to current user if empty."
+  default     = ""
+}
+

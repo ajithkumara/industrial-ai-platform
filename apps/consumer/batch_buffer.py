@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from consumer.storage_client import StorageClient
+from .storage_client import StorageClient
 from config.settings import settings
 
 

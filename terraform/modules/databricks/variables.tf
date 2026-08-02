@@ -27,3 +27,27 @@ variable "access_connector_id" {
   description = "The ID of the Databricks Access Connector."
   type        = string
 }
+
+variable "access_connector_principal_id" {
+  description = "The Principal ID of the Databricks Access Connector System Assigned Identity."
+  type        = string
+}
+
+variable "environment" {
+  description = "The deployment environment (e.g., dev, test, prod)."
+  type        = string
+  default     = "dev"
+}
+
+variable "storage_container_name" {
+  description = "The name of the storage container for Unity Catalog."
+  type        = string
+  default     = "datalake"
+}
+
+variable "principal" {
+  description = "The principal (user or group) to grant Unity Catalog permissions to. Defaults to current user if empty."
+  type        = string
+  default     = ""
+}
+

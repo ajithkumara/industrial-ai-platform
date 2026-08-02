@@ -67,3 +67,19 @@ output "app_insights_connection_string" {
   description = "The Connection String of the Application Insights instance."
   sensitive   = true
 }
+
+output "unity_catalog_name" {
+  value       = module.databricks.catalog_name
+  description = "The name of the Unity Catalog."
+}
+
+output "unity_catalog_storage_credential_name" {
+  value       = module.databricks.storage_credential_name
+  description = "The name of the Databricks Unity Catalog storage credential."
+}
+
+output "unity_catalog_external_location_name" {
+  value       = module.databricks.external_location_name
+  description = "The name of the Databricks Unity Catalog external location."
+}
+

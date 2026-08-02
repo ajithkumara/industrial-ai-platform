@@ -31,13 +31,19 @@ module "eventhub" {
 }
 
 module "databricks" {
-  source               = "../../modules/databricks"
-  resource_group_name  = module.resource_group.name
-  location             = module.resource_group.location
-  tags                 = var.tags
-  name_suffix          = local.name_suffix
-  storage_account_name = local.storage_account_name
-  access_connector_id  = module.access_connector.id
+  source                        = "../../modules/databricks"
+  resource_group_name           = module.resource_group.name
+  location                      = module.resource_group.location
+  tags                          = var.tags
+  name_suffix                   = local.name_suffix
+  environment                   = var.environment
+  storage_account_name          = local.storage_account_name
+  storage_container_name        = module.storage.datalake_container_name
+  access_connector_id           = module.access_connector.id
+  access_connector_principal_id = module.rbac.principal_id
+  principal                     = var.databricks_principal
+
+  depends_on = [module.rbac]
 }
 
 module "access_connector" {

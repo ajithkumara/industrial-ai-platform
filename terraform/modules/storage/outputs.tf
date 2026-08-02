@@ -13,3 +13,9 @@ output "primary_connection_string" {
   description = "The primary connection string for the storage account."
   sensitive   = true
 }
+
+output "datalake_container_name" {
+  value       = azurerm_storage_data_lake_gen2_filesystem.datalake.name
+  description = "The name of the datalake container."
+}
+

@@ -100,21 +100,15 @@ cp config/dev.yaml .env.yaml
 # Edit values for your Azure subscription
 ```
 
-### 3. Deploy infrastructure
+### 3. Deploy infrastructure & Unity Catalog
 ```bash
 cd terraform/environments/dev
 terraform init
 terraform apply
 ```
+*(Running `terraform apply` fully provisions Azure Infrastructure, Databricks Workspace, Unity Catalog Storage Credentials, External Location, Catalog `industrial_ai`, Schemas `bronze`/`silver`/`gold`/`serving`, and Grants with zero manual configuration required).*
 
-### 4. Deploy Unity Catalog resources
-```bash
-cd terraform/unity_catalog/dev
-terraform init
-terraform apply
-```
-
-### 5. Deploy Databricks Assets
+### 4. Deploy Databricks Assets & DLT Pipeline
 ```bash
 cd databricks/bundles/industrial_ai
 databricks bundle deploy --target dev
@@ -126,10 +120,9 @@ databricks bundle deploy --target dev
 
 | Step | Command | Description |
 |------|---------|-------------|
-| 1 | `terraform apply` in `environments/dev` | Provision Azure resources |
-| 2 | `terraform apply` in `unity_catalog/dev` | Create catalog, schemas, credentials |
-| 3 | `databricks bundle deploy` | Deploy notebooks and jobs to Databricks |
-| 4 | `databricks bundle run industrial_ai_bronze_job` | Run the Bronze ingestion job |
+| 1 | `terraform init && terraform apply` in `environments/dev` | Provision Azure resources, Databricks workspace, and Unity Catalog (credential, location, catalog, schemas, grants) |
+| 2 | `databricks bundle deploy --target dev` | Deploy DAB notebooks, DLT pipelines, and job workflows |
+| 3 | `databricks bundle run industrial_ai_bronze_job` | Run DLT pipeline / Medallion ingestion job |
 
 ---
 

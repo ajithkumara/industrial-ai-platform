@@ -1,7 +1,7 @@
 locals {
   name_suffix              = "${var.project_name}-${var.environment}"
   name_suffix_alphanumeric = replace(local.name_suffix, "-", "")
-  
+
   # Ensure storage account name is valid (lowercase, alphanumeric, max 24 chars)
   storage_account_name = lower(substr("st${local.name_suffix_alphanumeric}", 0, 24))
 }

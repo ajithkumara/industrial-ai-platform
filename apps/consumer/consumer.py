@@ -1,31 +1,28 @@
 """
-Azure Event Hub Consumer Application
+Azure Event Hub Consumer Application (Phase 1 Refactor)
 
-Receives telemetry events from Azure Event Hub and writes
-them to ADLS Gen2 in batches via BatchBuffer.
-
-Author: Ajith Kumara
-Project: Azure Telemetry Platform
+Receives domain-agnostic telemetry events from Azure Event Hub,
+validates them using Pydantic, routes invalid events to a Dead Letter Queue (DLQ),
+and writes valid events to ADLS Gen2 Bronze via BatchBuffer.
 """
 
 from __future__ import annotations
 
+import json
 import logging
 from datetime import datetime, timezone
 
 from azure.eventhub import EventHubConsumerClient
+from pydantic import ValidationError
 
 from config.settings import (
     CONSUMER_CONNECTION_STRING,
-    DATA_DIR,
-    LOCAL_FALLBACK_DIR,
-    LOGS_DIR,
     settings,
 )
 from .batch_buffer import BatchBuffer
 from .checkpoint import FileCheckpointManager
 from .storage_client import StorageClient
-from shared.telemetry import TelemetryRecord
+from shared.telemetry import TelemetryEvent
 from utils.logger import setup_logger
 
 # ---------------------------------------------------------------------------
@@ -34,15 +31,14 @@ from utils.logger import setup_logger
 
 logger = setup_logger(
     "consumer",
-    LOGS_DIR / "consumer.log",
+    # LOGS_DIR / "consumer.log", # Ensure LOGS_DIR is defined in your settings
 )
 
-checkpoint_manager = FileCheckpointManager(
-    DATA_DIR / "checkpoints.json"
-)
+# For local dev, file-based checkpoints are fine. 
+# In production, Databricks Structured Streaming handles checkpoints natively.
+checkpoint_manager = FileCheckpointManager("local/checkpoints.json")
 
 storage_client = StorageClient()
-
 batch_buffer = BatchBuffer(storage_client)
 
 
@@ -51,49 +47,56 @@ batch_buffer = BatchBuffer(storage_client)
 # ---------------------------------------------------------------------------
 
 def on_event(partition_context, event) -> None:
+    event_body = event.body_as_str(encoding="UTF-8")
+    
+    # 1. SCHEMA VALIDATION (The Enterprise Contract)
     try:
-        event_body = event.body_as_str(encoding="UTF-8")
+        record = TelemetryEvent.model_validate_json(event_body)
+        
+    except ValidationError as ve:
+        # DEAD LETTER QUEUE: Data is structurally invalid
+        logger.warning(f"Schema validation failed. Routing to DLQ. Error: {ve}")
+        storage_client.write_to_dlq(event_body, str(ve))
+        update_and_return(partition_context, event)
+        return
+        
+    except json.JSONDecodeError as je:
+        # DEAD LETTER QUEUE: Data isn't even valid JSON
+        logger.warning(f"Invalid JSON. Routing to DLQ. Error: {je}")
+        storage_client.write_to_dlq(event_body, str(je))
+        update_and_return(partition_context, event)
+        return
 
-        record = TelemetryRecord.from_json(event_body)
+    # 2. DOMAIN-AGNOSTIC LOGGING
+    logger.info(
+        "Received event | Partition: %s | Asset: %s | Device: %s | Priority: %s | EventID: %s",
+        partition_context.partition_id,
+        record.asset_type,
+        record.device_id,
+        record.priority,
+        record.event_id[:8] # Log first 8 chars of UUID to keep logs clean
+    )
 
-        logger.info(
-            "Received event from Partition %s: vehicle=%s speed=%s km/h ignition=%s",
-            partition_context.partition_id,
-            record.vehicleId,
-            record.speedKmh,
-            record.ignition,
-        )
-
-        # Buffer the event — flushes automatically when batch is full
-        try:
-            batch_buffer.add(record.to_dict())
-
-        except Exception:
-            # Local fallback when buffering / upload fails
-            LOCAL_FALLBACK_DIR.mkdir(parents=True, exist_ok=True)
-
-            filename = (
-                f"telemetry_"
-                f"{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S_%f')}"
-                f".json"
-            )
-
-            fallback_path = LOCAL_FALLBACK_DIR / filename
-
-            with open(fallback_path, "w") as f:
-                f.write(record.to_json())
-
-            logger.info("Saved locally (fallback) to %s", fallback_path)
-
-        # Update checkpoint after every event
-        checkpoint_manager.update_checkpoint(
-            partition_id=partition_context.partition_id,
-            offset=event.offset,
-            sequence_number=event.sequence_number,
-        )
-
+    # 3. BUFFER FOR BRONZE (ADLS Gen2)
+    try:
+        batch_buffer.add(record.model_dump())
     except Exception as e:
-        logger.error("Error processing event: %s", e)
+        logger.error(f"Failed to buffer event {record.event_id}: {e}")
+        storage_client.write_to_dlq(event_body, f"Buffer error: {e}")
+        update_and_return(partition_context, event)
+        return
+
+    # 4. UPDATE CHECKPOINT
+    update_and_return(partition_context, event)
+
+
+def update_and_return(partition_context, event):
+    """Helper to update checkpoint and return."""
+    checkpoint_manager.update_checkpoint(
+        partition_id=partition_context.partition_id,
+        offset=event.offset,
+        sequence_number=event.sequence_number,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -101,15 +104,8 @@ def on_event(partition_context, event) -> None:
 # ---------------------------------------------------------------------------
 
 def main() -> None:
-
-    logger.info(
-        "Starting consumer for Event Hub '%s'...",
-        settings.eventhub.hub_name,
-    )
-    logger.info(
-        "Consumer Group: %s",
-        settings.eventhub.consumer_group,
-    )
+    logger.info("Starting consumer for Event Hub '%s'...", settings.eventhub.hub_name)
+    logger.info("Consumer Group: %s", settings.eventhub.consumer_group)
 
     consumer = EventHubConsumerClient.from_connection_string(
         conn_str=CONSUMER_CONNECTION_STRING,
@@ -117,8 +113,10 @@ def main() -> None:
         eventhub_name=settings.eventhub.hub_name,
     )
 
-    # Resume from saved checkpoints if available
-    starting_positions = "-1"
+    # Resume from saved checkpoints if available.
+    # Fall back to "@latest" (new events only) when no checkpoint exists.
+    # Use "-1" here only if you want to replay ALL history on first start.
+    starting_positions = "@latest"
     try:
         stored_checkpoints = checkpoint_manager.checkpoints
         if stored_checkpoints:
@@ -126,15 +124,11 @@ def main() -> None:
                 pid: cp["offset"]
                 for pid, cp in stored_checkpoints.items()
             }
-            logger.info(
-                "Resuming partitions from checkpoints: %s",
-                starting_positions,
-            )
+            logger.info("Resuming partitions from checkpoints: %s", starting_positions)
+        else:
+            logger.info("No checkpoints found. Starting from @latest (new events only).")
     except Exception as e:
-        logger.warning(
-            "Could not build starting positions: %s. Defaulting to beginning.",
-            e,
-        )
+        logger.warning("Could not build starting positions: %s. Defaulting to @latest.", e)
 
     try:
         with consumer:
@@ -145,10 +139,7 @@ def main() -> None:
             )
     except KeyboardInterrupt:
         logger.info("Consumer stopped by user.")
-
-        # Flush any remaining buffered events before shutdown
         batch_buffer.flush()
-
     except Exception as e:
         logger.error("Consumer error: %s", e)
 
