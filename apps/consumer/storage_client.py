@@ -41,10 +41,10 @@ class StorageClient:
     - Validate telemetry records
     """
 
-    RAW_FOLDER: Final[str] = "bronze"
-    DLQ_FOLDER: Final[str] = "bronze/_dlq"
-
     def __init__(self) -> None:
+
+        self.raw_folder: str = settings.storage.raw_folder
+        self.dlq_folder: str = f"{self.raw_folder}/_dlq"
 
         logger.info(
             "Connecting to Storage Account '%s'...",
@@ -79,7 +79,7 @@ class StorageClient:
     def _build_directory(self, base_folder: str | None = None) -> str:
 
         now = self._utc_now()
-        folder = base_folder if base_folder is not None else self.RAW_FOLDER
+        folder = base_folder if base_folder is not None else self.raw_folder
 
         return str(
             PurePosixPath(
@@ -150,7 +150,7 @@ class StorageClient:
         if not events:
             raise ValueError("Telemetry batch is empty.")
 
-        directory = self._build_directory(self.RAW_FOLDER)
+        directory = self._build_directory(self.raw_folder)
         filename = self._build_filename(prefix="telemetry", ext="jsonl")
         file_path = str(PurePosixPath(directory, filename))
 
@@ -177,7 +177,7 @@ class StorageClient:
         """
         Write a failed / invalid event to the Dead Letter Queue (DLQ).
 
-        The DLQ lives at ``bronze/_dlq/year=.../month=.../day=.../``
+        The DLQ lives at ``<raw_folder>/_dlq/year=.../month=.../day=.../``
         so it is partitioned identically to the main Bronze data but
         physically isolated for easy discovery and replay.
 
@@ -199,7 +199,7 @@ class StorageClient:
             Uploaded ADLS DLQ file path.
         """
 
-        directory = self._build_directory(self.DLQ_FOLDER)
+        directory = self._build_directory(self.dlq_folder)
         filename = self._build_filename(prefix="dlq", ext="json")
         file_path = str(PurePosixPath(directory, filename))
 

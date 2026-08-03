@@ -47,6 +47,7 @@ class StorageSettings:
     account_name: str
     connection_string: str
     filesystem_name: str
+    raw_folder: str
     raw_batch_size: int
 
 
@@ -92,6 +93,11 @@ settings = AppSettings(
         filesystem_name=os.getenv(
             "FILESYSTEM_NAME",
             "raw",
+        ),
+
+        raw_folder=os.getenv(
+            "RAW_FOLDER",
+            "raw/telemetry",
         ),
 
         raw_batch_size=int(

@@ -16,6 +16,7 @@ print("Storage")
 print("--------------------------------")
 print(f"Storage Account  : {settings.storage.account_name}")
 print(f"Filesystem       : {settings.storage.filesystem_name}")
+print(f"Raw Folder       : {settings.storage.raw_folder}")
 print(f"Connection String: {'Loaded' if settings.storage.connection_string else 'Missing'}")
 
 print()
@@ -24,4 +25,4 @@ print("Batch Size")
 print("--------------------------------")
 print(settings.consumer_batch_size)
 
-print("\n✅ Configuration test PASSED")
+print("\n[OK] Configuration test PASSED")

@@ -28,3 +28,4 @@ crash.log
 # Variable files
 terraform.tfvars
 *.auto.tfvars
+local/checkpoints*.json
