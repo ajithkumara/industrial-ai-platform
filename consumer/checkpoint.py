@@ -6,7 +6,7 @@ logger = setup_logger("checkpoint")
 
 class FileCheckpointManager:
     """Manages partition checkpoints locally in a JSON file."""
-    
+
     def __init__(self, checkpoint_path: Path):
         self.checkpoint_path = Path(checkpoint_path)
         self.checkpoint_path.parent.mkdir(parents=True, exist_ok=True)

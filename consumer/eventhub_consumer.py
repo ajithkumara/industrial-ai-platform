@@ -63,18 +63,18 @@ batch_buffer: BatchBuffer | None = None
 
 def on_event(partition_context, event) -> None:
     event_body = event.body_as_str(encoding="UTF-8")
-    
+
     # 1. SCHEMA VALIDATION (The Enterprise Contract)
     try:
         record = TelemetryEvent.model_validate_json(event_body)
-        
+
     except ValidationError as ve:
         # DEAD LETTER QUEUE: Data is structurally invalid
         logger.warning(f"Schema validation failed. Routing to DLQ. Error: {ve}")
         storage_client.write_to_dlq(event_body, str(ve))
         update_and_return(partition_context, event)
         return
-        
+
     except json.JSONDecodeError as je:
         # DEAD LETTER QUEUE: Data isn't even valid JSON
         logger.warning(f"Invalid JSON. Routing to DLQ. Error: {je}")

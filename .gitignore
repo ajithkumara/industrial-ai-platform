@@ -1,12 +1,18 @@
 # Python
 __pycache__/
 *.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
 
 # Virtual Environment
 .venv/
+venv/
 
-# VS Code
+# VS Code / JetBrains
 .vscode/
+.idea/
 
 # Logs
 logs/
@@ -20,6 +26,10 @@ screenshots/
 Thumbs.db
 desktop.ini
 
+# Databricks CLI local bundle metadata
+.databricks/
+**/.databricks/
+
 # Terraform
 **/.terraform/
 *.tfstate
@@ -29,7 +39,10 @@ desktop.ini
 *.tfvars.json
 crash.log
 crash.*.log
-.terraform.lock.hcl
+
+# NOTE: .terraform.lock.hcl is intentionally NOT ignored — Terraform's own
+# guidance is to commit this file so provider versions are pinned/reproducible
+# across machines and CI. If it's currently tracked, keep it that way.
 
 # Terraform generated outputs (may contain sensitive connection strings/keys)
 **/outputs.json

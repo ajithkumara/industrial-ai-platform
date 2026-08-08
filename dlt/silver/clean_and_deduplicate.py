@@ -12,11 +12,13 @@ from pyspark.sql.window import Window
 # ---------------------------------------------------
 # SILVER TABLE: cleaned_telemetry_events
 #
-# BUGFIX: fully-qualified with industrial_ai.silver.* so this table lands
-# in the Terraform-provisioned `silver` schema regardless of the pipeline's
-# `target: silver` default (see dlt/bronze/ingest_raw_events.py for the
-# full explanation). Upstream read updated to the bronze table's own
-# fully-qualified name (industrial_ai.bronze.raw_telemetry_events).
+# Fully-qualified with industrial_ai.silver.* so this table lands in the
+# Terraform-provisioned `silver` schema regardless of the pipeline's
+# `target: bronze` default. Upstream read uses the bronze table's short
+# name ("telemetry_bronze", as registered in
+# dlt/bronze/ingest_raw_events.py) — within a single DLT pipeline,
+# dlt.read() resolves other tables in that same pipeline by their
+# registered name, not by fully-qualified catalog.schema.table.
 # ---------------------------------------------------
 @dlt.table(
     name="industrial_ai.silver.cleaned_telemetry_events",
@@ -29,7 +31,7 @@ from pyspark.sql.window import Window
 @dlt.expect_or_drop("valid_timestamp",  "timestamp IS NOT NULL")
 def cleaned_telemetry_events():
     df = (
-        dlt.read("industrial_ai.bronze.raw_telemetry_events")
+        dlt.read("telemetry_bronze")
         .select(
             col("event_id"),
             col("device_id"),
@@ -42,9 +44,9 @@ def cleaned_telemetry_events():
             col("_ingested_at")
         )
     )
-    
+
     # Deduplicate by event_id, keeping the most recent _ingested_at
     window_spec = Window.partitionBy("event_id").orderBy(col("_ingested_at").desc())
     deduped_df = df.withColumn("rn", row_number().over(window_spec)).filter(col("rn") == 1).drop("rn")
-    
+
     return deduped_df
