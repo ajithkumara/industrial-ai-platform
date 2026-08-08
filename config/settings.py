@@ -158,4 +158,13 @@ def validate_settings() -> None:
         )
 
 
-validate_settings()
+# NOTE: validate_settings() is intentionally NOT called automatically at
+# import time here. This module is imported transitively by almost every
+# package in the repo (consumer/, edge/, tests/), including in CI and unit
+# test contexts where no real Azure credentials are present. Previously,
+# `validate_settings()` ran unconditionally on import, which meant simply
+# importing `config.settings` (e.g. via `import consumer.batch_buffer`)
+# raised ValueError outside a fully-configured environment, breaking
+# `python -m pytest tests/` in CI. Entry points that require fully-populated
+# settings (e.g. edge.base_producer.EventHubProducer.__init__,
+# consumer.eventhub_consumer.main) call validate_settings() explicitly.

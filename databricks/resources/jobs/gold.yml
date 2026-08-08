@@ -1,0 +1,35 @@
+# NON-PRODUCTION / NOT DEPLOYED.
+#
+# This job is NOT part of the active production deployment: it is
+# intentionally excluded from databricks/databricks.yml's `include:` list
+# (which only loads resources/pipelines/*.yml), so `databricks bundle
+# deploy` will NOT create this Job.
+#
+# Reason: it runs dlt/gold/asset_health_summary.py as a plain
+# notebook_task, but that notebook is written against the Delta Live
+# Tables / Lakeflow Python API (`import dlt`, `@dlt.table`,
+# `dlt.read(...)`). None of that is available outside an actual DLT
+# pipeline run, so executing this as a standalone Job would fail. The
+# authoritative, working execution path for this transformation is the
+# `industrial_ai_dlt_pipeline` resource in
+# databricks/resources/pipelines/dlt.yml.
+#
+# Kept on disk only as a historical/manual reference. Do not re-add it to
+# databricks.yml's `include:` list without first rewriting it to not
+# depend on the DLT/Lakeflow runtime.
+resources:
+  jobs:
+    industrial_ai_gold_job:
+      name: "Industrial AI Gold Aggregation Job"
+      tasks:
+        - task_key: gold_aggregate
+          notebook_task:
+            notebook_path: ../../../dlt/gold/asset_health_summary.py
+            source: WORKSPACE
+          job_cluster_key: industrial_ai_cluster
+      job_clusters:
+        - job_cluster_key: industrial_ai_cluster
+          new_cluster:
+            spark_version: "15.4.x-scala2.12"
+            node_type_id: "Standard_DS3_v2"
+            num_workers: 2

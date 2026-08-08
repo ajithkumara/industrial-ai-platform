@@ -5,27 +5,39 @@ __pycache__/
 # Virtual Environment
 .venv/
 
-# Environment variables
-.env
-
 # VS Code
 .vscode/
 
 # Logs
 logs/
 
+# Data
+data/
+screenshots/
+
 # OS files
 .DS_Store
 Thumbs.db
+desktop.ini
+
 # Terraform
-**/.terraform/*
+**/.terraform/
 *.tfstate
 *.tfstate.*
-.terraform.lock.hcl
-crash.log
 *.tfplan
+*.tfvars
+*.tfvars.json
+crash.log
+crash.*.log
+.terraform.lock.hcl
 
-# Variable files
-terraform.tfvars
-*.auto.tfvars
+# Terraform generated outputs (may contain sensitive connection strings/keys)
+**/outputs.json
+
+# Local runtime state
 local/checkpoints*.json
+
+# Environment files
+.env
+.env.*
+!.env.example

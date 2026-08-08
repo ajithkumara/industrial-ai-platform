@@ -1,0 +1,24 @@
+name: Databricks CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'databricks/**'
+  pull_request:
+    paths:
+      - 'databricks/**'
+
+jobs:
+  validate:
+    name: Validate Databricks Bundle
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: databricks/setup-cli@main
+      - name: Databricks Bundle Validate
+        run: databricks bundle validate
+        working-directory: databricks
+        env:
+          DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}

@@ -1,0 +1,66 @@
+resources:
+  pipelines:
+    industrial_ai_dlt_pipeline:
+      name: "Azure Industrial AI DLT Pipeline"
+
+      # BUGFIX: was "dbw_industrial_ai_dev_7405619577623735" (looks like a
+      # workspace-name/ID string, not a Unity Catalog catalog name — no such
+      # UC catalog is created anywhere in terraform/). Terraform's
+      # module.databricks (terraform/modules/databricks/unity_catalog.tf)
+      # provisions a UC catalog literally named "industrial_ai".
+      #
+      # BUGFIX: `target: silver` previously meant every table produced by
+      # this pipeline (bronze, silver, AND gold notebooks below) would be
+      # published into the single `silver` schema, contradicting the
+      # Terraform-provisioned industrial_ai.bronze / industrial_ai.silver /
+      # industrial_ai.gold / industrial_ai.serving schema layout. Each
+      # dlt/bronze, dlt/silver, and dlt/gold table now declares its own
+      # fully-qualified `industrial_ai.<schema>.<table>` name (DLT/Lakeflow
+      # supports publishing to multiple schemas from a single pipeline via
+      # fully-qualified table names), so every table now lands in its
+      # correct schema regardless of this pipeline-level default. `target`
+      # is kept (set to `bronze`, an arbitrary but harmless choice) only
+      # because Databricks DLT pipeline config requires a default
+      # target/schema to be set; it is not actually used by any table
+      # currently registered in this pipeline since all of them are
+      # fully qualified above.
+      catalog: "industrial_ai"
+      target: bronze
+
+      development: true
+      continuous: false
+      photon: true
+
+      libraries:
+        - notebook:
+            path: ../../../dlt/bronze/ingest_raw_events.py
+        - notebook:
+            path: ../../../dlt/silver/clean_and_deduplicate.py
+        - notebook:
+            path: ../../../dlt/silver/flatten_payloads.py
+        - notebook:
+            path: ../../../dlt/gold/asset_health_summary.py
+
+      serverless: true
+
+      configuration:
+        # Explicit, deterministic path to the deployed config/asset_types/
+        # directory, consumed by dlt/silver/flatten_payloads.py via
+        # dlt/common/helpers.py's resolve_asset_types_dir() (reads this as
+        # a Spark configuration property). config/asset_types/ lives
+        # outside the bundle root (databricks/), so it is only guaranteed
+        # to exist at this workspace path because of the explicit
+        # `sync.include: ../config/asset_types/**` entry in
+        # databricks/databricks.yml. ${workspace.file_path} resolves to
+        # this bundle's synced "files" root in the workspace; "../config/
+        # asset_types" is the sibling directory that sync.include places
+        # the config files into (mirroring how the notebook `path:` values
+        # below already resolve dlt/ as a sibling of the bundle root).
+        asset_types_config_dir: "${workspace.file_path}/../config/asset_types"
+        bronze_path: "abfss://datalake@stindustrialaidev2026.dfs.core.windows.net/bronze"
+        # Neutralise any stale workspace-level account-key configs for both storage accounts.
+        # Unity Catalog External Location (via Access Connector MSI) is the correct auth path.
+        spark.hadoop.fs.azure.account.auth.type.stindustrialaidev2026.dfs.core.windows.net: "OAuth"
+        spark.hadoop.fs.azure.account.oauth.provider.type.stindustrialaidev2026.dfs.core.windows.net: "org.apache.hadoop.fs.azurebfs.oauth2.MsiTokenProvider"
+        spark.hadoop.fs.azure.account.auth.type.stmscaidev2026.dfs.core.windows.net: "OAuth"
+        spark.hadoop.fs.azure.account.oauth.provider.type.stmscaidev2026.dfs.core.windows.net: "org.apache.hadoop.fs.azurebfs.oauth2.MsiTokenProvider"

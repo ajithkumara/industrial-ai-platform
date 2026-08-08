@@ -66,10 +66,15 @@ This enforces consistent naming conventions:
 
 ## 4. State Management and Remote Backend
 
-By default, the configurations are configured with a `local` state backend for simplified testing. To implement a robust, production-ready backend:
+**This has already been completed for `dev`.** `terraform/environments/dev/backend.tf`
+is configured with an `azurerm` remote backend (Azure Storage Account
+`stterraformstate2026aj`, container `terraformstate`, key
+`dev.terraform.tfstate`) — state is NOT local for the applied `dev`
+environment. The steps below describe how to set up (or migrate) a remote
+backend for a new environment that does not have one yet:
 
 1. Create a shared Azure Storage Account specifically for Terraform states.
-2. In the target environment's `backend.tf` (e.g. [terraform/environments/dev/backend.tf](file:///c:/Users/Laptop/Documents/workspace/azure-telemetry-platform/terraform/environments/dev/backend.tf)), uncomment the `backend "azurerm"` block and configure the credentials:
+2. In the target environment's `backend.tf` (e.g. `terraform/environments/dev/backend.tf`), uncomment the `backend "azurerm"` block and configure the credentials:
 ```hcl
 terraform {
   backend "azurerm" {
@@ -122,7 +127,7 @@ To add a new environment (e.g., `staging`):
 ## 7. Progressive Maturity Path
 
 This infrastructure follows a progressive roadmap:
-* **Stage 1 (Current)**: Provision standard, modular Azure resources using a local backend.
-* **Stage 2**: Transition from local backend to Azure Storage remote state backend (`backend.tf`).
-* **Stage 3**: Extend `databricks` module using the Databricks provider to deploy workspace objects (clusters, notebooks, metastores, schemas, and pipelines) as code.
-* **Stage 4**: Enable automated validation (`terraform fmt` & `terraform validate`) and integration checks via GitHub Actions.
+* **Stage 1 (Done)**: Provision standard, modular Azure resources using a local backend.
+* **Stage 2 (Done for `dev`)**: Transition from local backend to Azure Storage remote state backend (`backend.tf`).
+* **Stage 3 (Done)**: Extend the `databricks` module using the Databricks provider to deploy Unity Catalog objects (storage credential, external location, catalog `industrial_ai`, schemas `bronze`/`silver`/`gold`/`serving`, grants) as code.
+* **Stage 4 (Current)**: Enable automated validation (`terraform fmt` & `terraform validate`) and integration checks via GitHub Actions (`.github/workflows/terraform.yml`, currently pointed at `terraform/environments/dev`).

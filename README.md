@@ -50,32 +50,32 @@ Databricks Structured Streaming
 ## Folder Structure
 
 ```
-azure-telemetry-platform/
-├── .github/workflows/       # CI/CD pipelines
-├── apps/
-│   ├── consumer/            # Event Hub consumer application
-│   └── producer/            # Telemetry producer / simulator
-├── config/                  # Environment configs (dev/test/prod YAML + settings)
+industrial-ai-platform/
+├── .github/
+│   └── workflows/
+│       ├── ci-cd.yml
+│       └── databricks_deploy.yml
+├── config/
+│   ├── environments/
+│   └── asset_types/
+├── shared/
+├── edge/
+├── consumer/
+├── dlt/
+│   ├── bronze/
+│   ├── silver/
+│   ├── gold/
+│   └── common/
+├── ml/
 ├── databricks/
-│   ├── bundles/industrial_ai/   # Databricks Asset Bundle (DAB)
-│   │   └── resources/
-│   │       ├── jobs/        # Per-layer job definitions
-│   │       └── pipelines/   # DLT pipeline definition
-│   ├── notebooks/           # Medallion layer notebooks
-│   │   ├── bronze/
-│   │   ├── silver/
-│   │   └── gold/
-│   └── sql/                 # SQL scripts for catalog/grants/schemas
-├── docs/architecture/       # Architecture diagrams
-├── local/                   # Local runtime files (checkpoints etc.)
-├── shared/                  # Shared Python library (telemetry model, schemas, helpers)
+├── monitoring/
 ├── terraform/
-│   ├── bootstrap/           # Remote state storage setup
-│   ├── environments/        # Environment-level Terraform (dev/test/prod)
-│   ├── modules/             # Reusable Terraform modules
-│   └── unity_catalog/       # Unity Catalog management (schemas, credentials)
-├── tests/                   # Python unit tests
-└── utils/                   # Shared utilities (logging)
+├── tests/
+├── docs/
+├── .env.example
+├── .gitignore
+├── README.md
+└── requirements.txt
 ```
 
 ---
@@ -96,9 +96,12 @@ cd azure-telemetry-platform
 
 ### 2. Configure environment
 ```bash
-cp config/dev.yaml .env.yaml
+cp config/environments/dev.yaml .env.yaml
 # Edit values for your Azure subscription
 ```
+Runtime secrets (Event Hub connection strings, storage account keys, etc.)
+used by `consumer/` and `edge/` are read from a separate `.env` file at the
+repo root (see `config/settings.py`) — this is not committed to git.
 
 ### 3. Deploy infrastructure & Unity Catalog
 ```bash
@@ -110,7 +113,8 @@ terraform apply
 
 ### 4. Deploy Databricks Assets & DLT Pipeline
 ```bash
-cd databricks/bundles/industrial_ai
+cd databricks
+databricks bundle validate --target dev
 databricks bundle deploy --target dev
 ```
 
@@ -121,8 +125,8 @@ databricks bundle deploy --target dev
 | Step | Command | Description |
 |------|---------|-------------|
 | 1 | `terraform init && terraform apply` in `environments/dev` | Provision Azure resources, Databricks workspace, and Unity Catalog (credential, location, catalog, schemas, grants) |
-| 2 | `databricks bundle deploy --target dev` | Deploy DAB notebooks, DLT pipelines, and job workflows |
-| 3 | `databricks bundle run industrial_ai_bronze_job` | Run DLT pipeline / Medallion ingestion job |
+| 2 | `databricks bundle deploy --target dev` | Deploy the DAB: notebook source files and the `industrial_ai_dlt_pipeline` DLT pipeline |
+| 3 | `databricks bundle run industrial_ai_dlt_pipeline` | Run the DLT pipeline (Bronze → Silver → Gold). This is the only production execution path for these transformations; the standalone jobs under `databricks/resources/jobs/` are not deployed (see comments in those files) |
 
 ---
 
