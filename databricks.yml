@@ -1,0 +1,41 @@
+bundle:
+  name: azure-industrial-ai-platform
+
+# BUGFIX: this file was previously databricks/databricks.yml, with the
+# bundle root at databricks/. That broke `databricks bundle validate` with
+# "path ... is not contained in sync root path" for every notebook under
+# dlt/ (and would have for config/asset_types/*.yml too) — Databricks
+# Asset Bundles can only reference source files that live inside or below
+# the directory containing databricks.yml; sync.include/exclude only
+# controls which files get uploaded, it does not expand that boundary.
+# Since dlt/ and config/asset_types/ are siblings of databricks/, not
+# descendants of it, no sync configuration could have fixed this — the
+# bundle root itself had to move. Moving databricks.yml to the repository
+# root means every existing file under dlt/, config/, and databricks/ is
+# now naturally inside the bundle root; no relative notebook paths needed
+# to change (databricks/resources/pipelines/dlt.yml's
+# ../../../dlt/bronze/... paths already resolved to this same location).
+
+# Only the DLT pipeline resource is included in the active production
+# deployment. databricks/resources/jobs/*.yml (bronze.yml, silver.yml,
+# gold.yml) are intentionally NOT included here: they define standalone
+# Databricks Jobs that run the exact same dlt/bronze, dlt/silver,
+# dlt/gold source files as the DLT pipeline below, which would create a
+# second, uncoordinated execution path for the same transformations. They
+# are kept on disk as non-production/manual reference resources only (see
+# the header comment in each of those files) and are not wired into this
+# bundle.
+include:
+  - databricks/resources/pipelines/*.yml
+
+workspace:
+  host: https://adb-7405614704586834.14.azuredatabricks.net
+  profile: canada-central-dev
+
+targets:
+  dev:
+    mode: development
+    default: true
+
+  prod:
+    mode: production

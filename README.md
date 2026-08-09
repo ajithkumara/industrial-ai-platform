@@ -84,6 +84,10 @@ Governance sits underneath all of it: Unity Catalog (`industrial_ai` catalog, `b
 
 ```
 industrial-ai-platform/
+├── databricks.yml            Bundle definition — bundle root is the repo root
+│                             (must be, since dlt/ and config/ below are
+│                             outside databricks/ and DAB can't reference
+│                             files outside its bundle root)
 ├── .github/workflows/       CI (tests), Databricks deploy, Terraform validate
 ├── config/
 │   ├── environments/        dev.yaml / test.yaml / prod.yaml
@@ -98,7 +102,6 @@ industrial-ai-platform/
 │   ├── gold/                  Aggregations and health metrics
 │   └── common/                Shared DLT helpers, config loader, expectations
 ├── databricks/
-│   ├── databricks.yml         Bundle definition
 │   ├── resources/pipelines/   The one production DLT pipeline
 │   ├── resources/jobs/        Non-production manual/backfill jobs (not deployed)
 │   └── sql/                   Catalog/schema/grant reference SQL
@@ -156,8 +159,8 @@ terraform apply
 This provisions the resource group, storage account and ADLS filesystem, Event Hub namespace, Databricks workspace, Access Connector, and the full Unity Catalog stack — Storage Credential, External Location, the `industrial_ai` catalog, and its `bronze`/`silver`/`gold`/`serving` schemas with grants — with no manual console steps.
 
 ### 4. Deploy the Databricks bundle and run the pipeline
+The bundle root is the repository root (`databricks.yml` lives at the top level, not inside `databricks/`) — this is required because the pipeline's source notebooks (`dlt/`) and asset-type configs (`config/asset_types/`) live outside `databricks/`, and Databricks Asset Bundles cannot reference files outside their bundle root. Run these from the repo root:
 ```bash
-cd databricks
 databricks bundle validate --target dev
 databricks bundle deploy --target dev
 databricks bundle run industrial_ai_dlt_pipeline

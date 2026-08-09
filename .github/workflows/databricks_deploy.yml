@@ -24,7 +24,10 @@ jobs:
       - uses: databricks/setup-cli@main
       - name: Databricks Bundle Validate
         run: databricks bundle validate
-        working-directory: databricks
+        # BUGFIX: bundle root moved from databricks/ to the repository
+        # root (see databricks.yml) because dlt/ and config/asset_types/
+        # live outside databricks/ and DAB cannot reference files outside
+        # its bundle root. No working-directory override needed now.
         env:
           DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
           DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}

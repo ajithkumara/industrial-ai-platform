@@ -43,16 +43,15 @@ resources:
         # Explicit, deterministic path to the deployed config/asset_types/
         # directory, consumed by dlt/silver/flatten_payloads.py via
         # dlt/common/helpers.py's resolve_asset_types_dir() (reads this as
-        # a Spark configuration property). config/asset_types/ lives
-        # outside the bundle root (databricks/), so it is only guaranteed
-        # to exist at this workspace path because of the explicit
-        # `sync.include: ../config/asset_types/**` entry in
-        # databricks/databricks.yml. ${workspace.file_path} resolves to
-        # this bundle's synced "files" root in the workspace; "../config/
-        # asset_types" is the sibling directory that sync.include places
-        # the config files into (mirroring how the notebook `path:` values
-        # below already resolve dlt/ as a sibling of the bundle root).
-        asset_types_config_dir: "${workspace.file_path}/../config/asset_types"
+        # a Spark configuration property). The bundle root is the
+        # repository root (../databricks.yml, previously
+        # databricks/databricks.yml — moved because notebook/config source
+        # files under dlt/ and config/ live outside the databricks/
+        # subtree, and Databricks Asset Bundles cannot reference files
+        # outside the bundle root). ${workspace.file_path} now resolves to
+        # the synced repository root, so config/asset_types is a direct
+        # child of it — no "../" needed.
+        asset_types_config_dir: "${workspace.file_path}/config/asset_types"
         # BUGFIX: was "abfss://.../bronze" — a path the consumer never
         # writes to and dlt/bronze/ingest_raw_events.py never previously
         # read anyway (it hardcoded a different path). The consumer's
