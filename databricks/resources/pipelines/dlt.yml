@@ -9,21 +9,17 @@ resources:
       # module.databricks (terraform/modules/databricks/unity_catalog.tf)
       # provisions a UC catalog literally named "industrial_ai".
       #
-      # BUGFIX: `target: silver` previously meant every table produced by
-      # this pipeline (bronze, silver, AND gold notebooks below) would be
-      # published into the single `silver` schema, contradicting the
-      # Terraform-provisioned industrial_ai.bronze / industrial_ai.silver /
-      # industrial_ai.gold / industrial_ai.serving schema layout. Each
-      # dlt/bronze, dlt/silver, and dlt/gold table now declares its own
-      # fully-qualified `industrial_ai.<schema>.<table>` name (DLT/Lakeflow
-      # supports publishing to multiple schemas from a single pipeline via
-      # fully-qualified table names), so every table now lands in its
-      # correct schema regardless of this pipeline-level default. `target`
-      # is kept (set to `bronze`, an arbitrary but harmless choice) only
-      # because Databricks DLT pipeline config requires a default
-      # target/schema to be set; it is not actually used by any table
-      # currently registered in this pipeline since all of them are
-      # fully qualified above.
+      # NOTE on schema routing: `target: bronze` is this pipeline's default
+      # publish schema. The Bronze table (dlt/bronze/ingest_raw_events.py,
+      # "telemetry_bronze") uses that bare default, landing it in
+      # industrial_ai.bronze.telemetry_bronze. The Silver and Gold tables
+      # (dlt/silver/clean_and_deduplicate.py, dlt/silver/flatten_payloads.py,
+      # dlt/gold/asset_health_summary.py) each declare their own
+      # fully-qualified `industrial_ai.<schema>.<table>` name instead, so
+      # they land in industrial_ai.silver.* / industrial_ai.gold.*
+      # regardless of this pipeline-level default (DLT/Lakeflow supports
+      # publishing to multiple schemas from a single pipeline via
+      # fully-qualified table names).
       catalog: "industrial_ai"
       target: bronze
 
@@ -57,7 +53,14 @@ resources:
         # the config files into (mirroring how the notebook `path:` values
         # below already resolve dlt/ as a sibling of the bundle root).
         asset_types_config_dir: "${workspace.file_path}/../config/asset_types"
-        bronze_path: "abfss://datalake@stindustrialaidev2026.dfs.core.windows.net/bronze"
+        # BUGFIX: was "abfss://.../bronze" — a path the consumer never
+        # writes to and dlt/bronze/ingest_raw_events.py never previously
+        # read anyway (it hardcoded a different path). The consumer's
+        # actual landing path (see config/settings.py RAW_FOLDER default,
+        # and the ingest_raw_events.py comment this replaces) is
+        # raw/telemetry. Now genuinely consumed by
+        # dlt/bronze/ingest_raw_events.py via spark.conf.get("bronze_path").
+        bronze_path: "abfss://datalake@stindustrialaidev2026.dfs.core.windows.net/raw/telemetry/"
         # Neutralise any stale workspace-level account-key configs for both storage accounts.
         # Unity Catalog External Location (via Access Connector MSI) is the correct auth path.
         spark.hadoop.fs.azure.account.auth.type.stindustrialaidev2026.dfs.core.windows.net: "OAuth"

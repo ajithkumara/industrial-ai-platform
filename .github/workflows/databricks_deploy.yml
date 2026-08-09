@@ -5,9 +5,15 @@ on:
     branches: [main]
     paths:
       - 'databricks/**'
+      - 'dlt/**'
+      - 'config/asset_types/**'
+      - 'shared/**'
   pull_request:
     paths:
       - 'databricks/**'
+      - 'dlt/**'
+      - 'config/asset_types/**'
+      - 'shared/**'
 
 jobs:
   validate:
