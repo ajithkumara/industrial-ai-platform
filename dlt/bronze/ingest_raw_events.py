@@ -16,10 +16,22 @@ bronze_path = spark.conf.get("bronze_path")
     comment="Raw telemetry ingested from ADLS Gen2 using Auto Loader"
 )
 def telemetry_bronze():
+    # BUGFIX: dlt/silver/clean_and_deduplicate.py selects _source_file and
+    # _ingested_at (the latter also used to pick the most-recent record
+    # per event_id during deduplication), but this table never produced
+    # either column, causing
+    # `UNRESOLVED_COLUMN.WITH_SUGGESTION: ... _source_file ...` at
+    # pipeline-run time. input_file_name() (the usual batch fix) does not
+    # work here because this is a streaming Auto Loader source; the
+    # equivalent for streaming file sources is Databricks' built-in
+    # `_metadata` column, available on any file-based source including
+    # cloudFiles.
     return (
         spark.readStream
         .format("cloudFiles")
         .option("cloudFiles.format", "json")
         .option("cloudFiles.inferColumnTypes", "true")
         .load(bronze_path)
+        .withColumn("_source_file", col("_metadata.file_path"))
+        .withColumn("_ingested_at", col("_metadata.file_modification_time"))
     )

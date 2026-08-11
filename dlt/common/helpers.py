@@ -20,21 +20,42 @@ import yaml
 # Paths
 # ---------------------------------------------------------------------------
 
-# dlt/common/helpers.py -> repo root is two levels up (dlt/common -> dlt -> root)
-_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+def _local_dev_asset_types_dir() -> str:
+    """
+    Local development / unit-test fallback ONLY. Once this code is deployed
+    and running inside the DLT pipeline, resolve_asset_types_dir() below
+    never reaches this: the deployed pipeline supplies the directory
+    explicitly and deterministically via its `configuration` block (see
+    databricks/resources/pipelines/dlt.yml ->
+    configuration.asset_types_config_dir).
 
-# Local development / unit-test fallback ONLY. Once this code is deployed
-# and running inside the DLT pipeline, resolve_asset_types_dir() below
-# never reaches this: the deployed pipeline supplies the directory
-# explicitly and deterministically via its `configuration` block (see
-# databricks/resources/pipelines/dlt.yml ->
-# configuration.asset_types_config_dir). Walking up from __file__ is
-# fragile once code is synced/deployed through a Databricks Asset Bundle
-# (the on-disk layout of the deployed workspace files is not guaranteed to
-# match the git repo layout), so it is kept only as a convenience default
-# for running locally / under pytest, where there is no Spark session and
-# no DAB deployment.
-_LOCAL_DEV_ASSET_TYPES_DIR = os.path.join(_REPO_ROOT, "config", "asset_types")
+    BUGFIX: this used to compute a module-level constant via __file__ at
+    *import* time, unconditionally -- including when this module is loaded
+    inside a deployed DLT notebook, where __file__ is simply not defined
+    (confirmed: `NameError: name '__file__' is not defined` at pipeline-run
+    time, even though the exact same code runs fine locally/under pytest,
+    where a normal Python import always has __file__). Now computed lazily,
+    only when this fallback path is actually taken (no active Spark
+    session / no pipeline configuration value present), which never
+    happens once this is running inside the deployed pipeline.
+    """
+    try:
+        this_file = __file__
+    except NameError as exc:
+        raise RuntimeError(
+            "resolve_asset_types_dir() fell through to the local-dev "
+            "__file__-based fallback, but __file__ is not defined in this "
+            "execution context. This fallback is only valid locally/under "
+            "pytest -- in a deployed DLT pipeline, the "
+            "asset_types_config_dir pipeline configuration value "
+            "(databricks/resources/pipelines/dlt.yml) must be set and "
+            "readable via spark.conf.get(), which should have been used "
+            "instead of ever reaching this fallback."
+        ) from exc
+    # dlt/common/helpers.py -> repo root is two levels up (dlt/common -> dlt -> root)
+    repo_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(this_file))))
+    return os.path.join(repo_root, "config", "asset_types")
+
 
 # Name of the DLT pipeline `configuration` key (see
 # databricks/resources/pipelines/dlt.yml) that carries the deployed,
@@ -77,14 +98,20 @@ def resolve_asset_types_dir() -> str:
     except ImportError:
         pass
 
-    return _LOCAL_DEV_ASSET_TYPES_DIR
+    return _local_dev_asset_types_dir()
 
 
-# Backwards-compatible module-level constant. Reflects the local/dev
-# fallback path only; production code goes through
-# resolve_asset_types_dir() (used as the default below) so the
-# pipeline-configuration value is honored when present.
-ASSET_TYPES_DIR = _LOCAL_DEV_ASSET_TYPES_DIR
+def __getattr__(name: str):
+    # Backwards-compatible lazy module attribute. Reflects the local/dev
+    # fallback path only; production code goes through
+    # resolve_asset_types_dir() (used as the default in
+    # load_asset_type_config/discover_asset_type_configs) so the
+    # pipeline-configuration value is honored when present. Lazy (PEP 562)
+    # so merely importing this module never touches __file__ -- only
+    # accessing helpers.ASSET_TYPES_DIR directly does.
+    if name == "ASSET_TYPES_DIR":
+        return _local_dev_asset_types_dir()
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 # Mapping of the type names allowed in config/asset_types/*.yml to Spark SQL
 # cast type strings. Keeping this table small and explicit makes malformed

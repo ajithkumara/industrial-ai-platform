@@ -1,0 +1,64 @@
+# Config-driven asset-type mapping for "bearing_sensor" telemetry.
+#
+# Source: adaptive-edge-orchestrator's sensor_replay.py, bridged onto
+# Event Hub by edge/nats_bearing_bridge.py (NATS subject: see
+# NATS_BEARING_SENSOR_SUBJECT, default "sensors.bearing"). Raw bearing
+# vibration telemetry with CWRU-dataset fault-classification features.
+#
+# Consumed generically by dlt/silver/flatten_payloads.py — adding a new
+# asset type requires ONLY a new file here (plus compatible telemetry
+# payloads). No Python changes should be required.
+#
+# NOTE: this config was written from pasted payload examples, not the
+# real adaptive-edge-orchestrator source. Field names/types below should
+# be verified once that repo is available.
+
+asset_type: bearing_sensor
+silver_table: silver_bearing_sensor_telemetry
+primary_key: [event_id]
+deduplicate: true
+
+fields:
+  - source: payload.seq
+    target: seq
+    type: integer
+
+  - source: payload.file
+    target: source_file
+    type: string
+
+  - source: payload.label
+    target: label
+    type: string
+
+  - source: payload.window_idx
+    target: window_idx
+    type: integer
+
+  - source: payload.features.rms
+    target: rms
+    type: double
+
+  - source: payload.features.peak
+    target: peak
+    type: double
+
+  - source: payload.features.crest
+    target: crest
+    type: double
+
+  - source: payload.features.kurtosis
+    target: kurtosis
+    type: double
+
+  - source: payload.features.skew
+    target: skew
+    type: double
+
+  - source: payload.features.variance
+    target: variance
+    type: double
+
+  - source: payload.features.mean_abs
+    target: mean_abs
+    type: double

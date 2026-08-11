@@ -52,10 +52,20 @@ class StorageSettings:
 
 
 @dataclass(frozen=True)
+class NatsSettings:
+    url: str
+    bearing_sensor_subject: str
+    bearing_inference_subject: str
+    orchestrator_mode_subject: str
+    context_snapshot_subject: str
+
+
+@dataclass(frozen=True)
 class AppSettings:
     eventhub: EventHubSettings
     storage: StorageSettings
     consumer_batch_size: int
+    nats: NatsSettings
 
 
 # ---------------------------------------------------------------------
@@ -110,6 +120,38 @@ settings = AppSettings(
             "CONSUMER_BATCH_SIZE",
             "20",
         )
+    ),
+
+    # NATS -> Event Hub bridge settings (edge/nats_bearing_bridge.py), used
+    # to bring adaptive-edge-orchestrator's bearing sensor/inference events
+    # into this pipeline as new config-driven asset types. Kept out of
+    # validate_settings() below deliberately -- unrelated to the core
+    # consumer/edge producer path, so people not running the bridge
+    # shouldn't be forced to configure it.
+    #
+    # ASSUMPTION (unverified -- built from pasted payload examples only,
+    # no access to the adaptive-edge-orchestrator repo): subject names
+    # below are guesses. sensors.bearing was stated explicitly; the
+    # inference subject was not, "inference.bearing" is a placeholder.
+    # Confirm both against the real sensor_replay.py / inference_engine.py
+    # publish calls before running the bridge.
+    nats=NatsSettings(
+        url=os.getenv("NATS_URL", "nats://localhost:4222"),
+        bearing_sensor_subject=os.getenv(
+            "NATS_BEARING_SENSOR_SUBJECT", "sensors.bearing"
+        ),
+        bearing_inference_subject=os.getenv(
+            "NATS_BEARING_INFERENCE_SUBJECT", "inference.bearing"
+        ),
+        # Mode transitions and context snapshots -- see Architecture v1.0
+        # Section 3.3's topic table. Subject names UNVERIFIED against the
+        # real repo, same caveat as the two subjects above.
+        orchestrator_mode_subject=os.getenv(
+            "NATS_ORCHESTRATOR_MODE_SUBJECT", "orchestrator.mode"
+        ),
+        context_snapshot_subject=os.getenv(
+            "NATS_CONTEXT_SNAPSHOT_SUBJECT", "context.snapshot"
+        ),
     ),
 )
 

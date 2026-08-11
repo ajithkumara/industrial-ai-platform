@@ -27,6 +27,11 @@ bundle:
 # bundle.
 include:
   - databricks/resources/pipelines/*.yml
+  # CloudForest training + scoring (2026-08). Plain PySpark notebooks,
+  # not DLT -- deliberately a separate Job resource, not folded into
+  # bronze.yml/silver.yml/gold.yml's excluded pattern above. See
+  # databricks/resources/jobs/cloud_forest.yml header comment.
+  - databricks/resources/jobs/cloud_forest.yml
 
 workspace:
   host: https://adb-7405614704586834.14.azuredatabricks.net

@@ -36,6 +36,25 @@ resources:
             path: ../../../dlt/silver/flatten_payloads.py
         - notebook:
             path: ../../../dlt/gold/asset_health_summary.py
+        # Research-evidence Gold tables (2026-08) -- see
+        # docs/architecture/RESEARCH_GAP_VERIFICATION_AND_TARGET_DESIGN.md
+        # Part 6 for the dependency order and what each table serves.
+        # mode_history and detection_performance/edge_autonomy/cloud_egress
+        # all read only from tables flatten_payloads.py already produces
+        # (silver_orchestrator_mode, silver_context_snapshot,
+        # silver_bearing_inference_results), so ordering among these five
+        # notebooks doesn't matter to DLT's dependency resolution -- it
+        # builds the graph from dlt.read() calls, not file order.
+        - notebook:
+            path: ../../../dlt/gold/mode_history.py
+        - notebook:
+            path: ../../../dlt/gold/detection_performance.py
+        - notebook:
+            path: ../../../dlt/gold/edge_autonomy.py
+        - notebook:
+            path: ../../../dlt/gold/cloud_egress.py
+        - notebook:
+            path: ../../../dlt/gold/escalation_efficacy.py
 
       serverless: true
 
@@ -52,6 +71,13 @@ resources:
         # the synced repository root, so config/asset_types is a direct
         # child of it — no "../" needed.
         asset_types_config_dir: "${workspace.file_path}/config/asset_types"
+        # Explicit, deterministic path to the deployed dlt/common/
+        # directory, consumed by dlt/silver/flatten_payloads.py to locate
+        # helpers.py without relying on __file__ (which is not defined
+        # inside a deployed DLT notebook's execution context — confirmed
+        # by NameError at pipeline-run time). Same rationale/pattern as
+        # asset_types_config_dir above.
+        dlt_common_dir: "${workspace.file_path}/dlt/common"
         # BUGFIX: was "abfss://.../bronze" — a path the consumer never
         # writes to and dlt/bronze/ingest_raw_events.py never previously
         # read anyway (it hardcoded a different path). The consumer's

@@ -24,16 +24,29 @@
 # reliable inside a DLT pipeline notebook context. To avoid that collision,
 # dlt/common/helpers.py is loaded directly from its file path instead of
 # via package import.
+#
+# BUGFIX: the file path used to be derived from __file__
+# (os.path.dirname(os.path.abspath(__file__))), which fails with
+# `NameError: name '__file__' is not defined` once this actually runs as
+# a deployed DLT notebook -- __file__ is simply not defined in that
+# execution context (it works locally/under pytest only because a normal
+# Python import always has __file__). This file can only ever execute
+# inside a Databricks DLT pipeline anyway (it imports `dlt`, which does
+# not exist outside one), so there is no local-execution case to support
+# here -- the pipeline's `configuration.dlt_common_dir` value
+# (databricks/resources/pipelines/dlt.yml), read via spark.conf.get(), is
+# used unconditionally instead.
 
 import importlib.util
 import os
 import sys
 
 import dlt
-from pyspark.sql.functions import col
+from pyspark.sql.functions import col, lit
+from pyspark.sql.types import StructType
 
-_THIS_DIR = os.path.dirname(os.path.abspath(__file__))
-_HELPERS_PATH = os.path.join(_THIS_DIR, "..", "common", "helpers.py")
+_dlt_common_dir = spark.conf.get("dlt_common_dir")
+_HELPERS_PATH = os.path.join(_dlt_common_dir, "helpers.py")
 
 _spec = importlib.util.spec_from_file_location("_dlt_common_helpers", _HELPERS_PATH)
 _helpers = importlib.util.module_from_spec(_spec)
@@ -60,20 +73,59 @@ _ENVELOPE_COLUMNS = [
 ]
 
 
-def _build_select_columns(config) -> list:
+def _source_path_exists(schema: StructType, dotted_path: str) -> bool:
+    """
+    Whether a dotted path (e.g. "payload.rotor_rpm") resolves against the
+    given DataFrame schema.
+
+    BUGFIX: field access like col("payload.rotor_rpm") is resolved
+    statically against `payload`'s struct type, which Auto Loader infers
+    purely from JSON actually observed in the landing data. If a given
+    asset_type has a config/asset_types/*.yml but no device of that type
+    has sent real data yet, its configured payload fields genuinely do
+    not exist in the inferred schema -- referencing them directly raised
+    AnalysisException [FIELD_NOT_FOUND] and failed the ENTIRE pipeline
+    update, not just that one asset type's table. That defeats the
+    "onboard a new asset type via YAML only" promise, since onboarding a
+    type ahead of its data arriving would take the whole pipeline down.
+    Used below to fall back to a typed null instead of crashing.
+    """
+
+    fields = schema.fields
+    for i, part in enumerate(dotted_path.split(".")):
+        match = next((f for f in fields if f.name == part), None)
+        if match is None:
+            return False
+        if i < len(dotted_path.split(".")) - 1:
+            if not isinstance(match.dataType, StructType):
+                return False
+            fields = match.dataType.fields
+    return True
+
+
+def _build_select_columns(schema: StructType, config) -> list:
     """
     Build the list of Spark columns for a single asset_type config:
-    envelope columns + configured payload fields cast to their declared type.
+    envelope columns + configured payload fields cast to their declared
+    type. A configured field whose source path doesn't (yet) exist in the
+    observed data's schema is emitted as a typed null column rather than
+    failing the whole flow -- see _source_path_exists().
     """
 
     columns = [col(c) for c in _ENVELOPE_COLUMNS]
 
     for field_mapping in config.fields:
-        columns.append(
-            col(field_mapping.source)
-            .cast(field_mapping.spark_cast_type())
-            .alias(field_mapping.target)
-        )
+        cast_type = field_mapping.spark_cast_type()
+        if _source_path_exists(schema, field_mapping.source):
+            columns.append(
+                col(field_mapping.source)
+                .cast(cast_type)
+                .alias(field_mapping.target)
+            )
+        else:
+            columns.append(
+                lit(None).cast(cast_type).alias(field_mapping.target)
+            )
 
     return columns
 
@@ -86,15 +138,14 @@ def _make_flatten_fn(config):
     """
 
     def _flatten():
-        select_columns = _build_select_columns(config)
-
         df = (
             dlt.read("industrial_ai.silver.cleaned_telemetry_events")
             .filter(col("asset_type") == config.asset_type)
-            .select(*select_columns)
         )
 
-        return df
+        select_columns = _build_select_columns(df.schema, config)
+
+        return df.select(*select_columns)
 
     return _flatten
 

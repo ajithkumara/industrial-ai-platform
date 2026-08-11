@@ -78,6 +78,99 @@ def test_discover_asset_type_configs_finds_all_three_shipped_types():
     assert {"vehicle", "industrial", "wind_turbine"}.issubset(discovered)
 
 
+def test_bearing_sensor_config_loads_and_validates():
+    config = helpers.load_asset_type_config("bearing_sensor", asset_types_dir=_ASSET_TYPES_DIR)
+    assert config.asset_type == "bearing_sensor"
+    assert config.silver_table == "silver_bearing_sensor_telemetry"
+    field_sources = {f.source for f in config.fields}
+    assert "payload.features.rms" in field_sources
+    assert "payload.label" in field_sources
+    for f in config.fields:
+        assert f.source.startswith("payload.")
+        assert f.spark_cast_type()
+
+
+def test_bearing_inference_config_loads_and_validates():
+    config = helpers.load_asset_type_config("bearing_inference", asset_types_dir=_ASSET_TYPES_DIR)
+    assert config.asset_type == "bearing_inference"
+    assert config.silver_table == "silver_bearing_inference_results"
+    field_sources = {f.source for f in config.fields}
+    assert "payload.mode" in field_sources
+    assert "payload.anomaly_score" in field_sources
+    for f in config.fields:
+        assert f.source.startswith("payload.")
+        assert f.spark_cast_type()
+
+
+def test_bearing_inference_uses_ground_truth_label_not_label():
+    # 2026-08 rename: prediction (anomaly/anomaly_score) and ground truth
+    # (the dataset's fault class) were previously adjacent, easily
+    # confused columns -- both literally named "label"/nothing. This is
+    # the fix; regressing it silently reintroduces a research-integrity
+    # risk for F1/precision/recall evidence.
+    config = helpers.load_asset_type_config("bearing_inference", asset_types_dir=_ASSET_TYPES_DIR)
+    targets = {f.target for f in config.fields}
+    assert "ground_truth_label" in targets
+    assert "label" not in targets
+
+
+def test_bearing_inference_has_forward_looking_escalation_fields():
+    # These may be NULL until the real orchestrator emits them (schema-
+    # aware null fallback in flatten_payloads.py) -- but the columns must
+    # exist for gold.escalation_efficacy / gold.detection_performance to
+    # be buildable at all.
+    config = helpers.load_asset_type_config("bearing_inference", asset_types_dir=_ASSET_TYPES_DIR)
+    targets = {f.target for f in config.fields}
+    assert {"edge_confidence", "model_version", "policy_version", "cloud_reachable"}.issubset(
+        targets
+    )
+
+
+def test_orchestrator_mode_config_loads_and_validates():
+    config = helpers.load_asset_type_config("orchestrator_mode", asset_types_dir=_ASSET_TYPES_DIR)
+    assert config.asset_type == "orchestrator_mode"
+    assert config.silver_table == "silver_orchestrator_mode"
+    targets = {f.target for f in config.fields}
+    assert {"from_mode", "to_mode", "trigger"}.issubset(targets)
+    for f in config.fields:
+        assert f.source.startswith("payload.")
+        assert f.spark_cast_type()
+
+
+def test_context_snapshot_config_loads_and_validates():
+    config = helpers.load_asset_type_config("context_snapshot", asset_types_dir=_ASSET_TYPES_DIR)
+    assert config.asset_type == "context_snapshot"
+    assert config.silver_table == "silver_context_snapshot"
+    targets = {f.target for f in config.fields}
+    assert {"rtt_ms", "cpu_pct", "cloud_reachable", "is_breach_sample"}.issubset(targets)
+
+
+def test_cloud_validation_config_loads_and_validates():
+    config = helpers.load_asset_type_config("cloud_validation", asset_types_dir=_ASSET_TYPES_DIR)
+    assert config.asset_type == "cloud_validation"
+    assert config.silver_table == "silver_cloud_validation_results"
+    targets = {f.target for f in config.fields}
+    # source_event_id is the correlation key back to
+    # silver_bearing_inference_results.event_id -- this is what makes
+    # gold.escalation_efficacy possible.
+    assert {"source_event_id", "agrees_with_edge", "cloud_score"}.issubset(targets)
+    for f in config.fields:
+        assert f.source.startswith("payload.")
+        assert f.spark_cast_type()
+
+
+def test_discover_asset_type_configs_finds_bearing_types_too():
+    configs = helpers.discover_asset_type_configs(asset_types_dir=_ASSET_TYPES_DIR)
+    discovered = {c.asset_type for c in configs}
+    assert {
+        "bearing_sensor",
+        "bearing_inference",
+        "orchestrator_mode",
+        "context_snapshot",
+        "cloud_validation",
+    }.issubset(discovered)
+
+
 def test_new_synthetic_asset_type_requires_only_a_yaml_file(tmp_path):
     """
     THE key proof: onboard a brand-new asset type ("solar_panel") that the

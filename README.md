@@ -144,6 +144,12 @@ FILESYSTEM_NAME=raw
 RAW_FOLDER=raw/telemetry
 RAW_BATCH_SIZE=20
 CONSUMER_BATCH_SIZE=20
+
+# Optional -- only needed to run edge.run_nats_bridge (see "Bringing in
+# other event sources" below). All have working defaults.
+NATS_URL=nats://localhost:4222
+NATS_BEARING_SENSOR_SUBJECT=sensors.bearing
+NATS_BEARING_INFERENCE_SUBJECT=inference.bearing
 ```
 
 `RAW_BATCH_SIZE` and `CONSUMER_BATCH_SIZE` are deliberately separate: `CONSUMER_BATCH_SIZE` governs how many Event Hub records are processed per consumer batch, while `RAW_BATCH_SIZE` governs how many validated events accumulate before one JSONL file is written to ADLS — the latter is what actually controls file size in landing/raw.
@@ -183,6 +189,14 @@ This is the platform's core extensibility test. To onboard, say, `wind_turbine`:
 2. Deploy. `dlt/silver/flatten_payloads.py` discovers the new config automatically and registers a new DLT table — **no changes to any `.py` file required.**
 
 `tests/test_asset_type_config.py` enforces this: it onboards a synthetic asset type at test time using only a YAML file and confirms it flows through the same loader `flatten_payloads.py` uses in production.
+
+### Bringing in other event sources
+
+Not every telemetry source publishes directly to Event Hub. `edge/nats_bearing_bridge.py` is the reference example of bridging a different transport in: it subscribes to NATS subjects (used by a separate research project, `adaptive-edge-orchestrator`, for bearing-fault-classification sensor and inference events), translates each message into the generic `TelemetryEvent` envelope, and republishes onto Event Hub via the existing `EventHubProducer` — no changes to the consumer, Bronze, or the generic Silver flattener. The two new asset types it introduces (`bearing_sensor`, `bearing_inference`, see `config/asset_types/`) are just more proof that config-driven onboarding works for real, unrelated domains, not only synthetic tests.
+
+Run it with `python -m edge.run_nats_bridge` once NATS is reachable and Event Hub credentials are configured.
+
+**Caveat:** this bridge and its two asset-type configs were built from pasted payload examples, without access to the `adaptive-edge-orchestrator` source. The NATS subject names, field names, and types should be verified against the real `sensor_replay.py`/`inference_engine.py` publish calls before relying on this in practice — see the caveat comment at the top of `edge/nats_bearing_bridge.py`.
 
 ---
 
