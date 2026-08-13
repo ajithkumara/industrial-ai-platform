@@ -1,0 +1,98 @@
+{
+  "A": {
+    "scenario": "A_normal_operation",
+    "n_bearing_sensor_events": 10,
+    "n_bearing_inference_events": 10,
+    "detection_performance": {
+      "mode": "CLOUD_OPTIMISED",
+      "n_events": 10,
+      "tp": 0,
+      "fp": 0,
+      "fn": 0,
+      "tn": 10,
+      "precision": null,
+      "recall": null
+    }
+  },
+  "B": {
+    "scenario": "B_edge_uncertain_hybrid",
+    "n_escalations": 6,
+    "inference_event_ids": [
+      "7213dc1c-6838-568a-a287-cbf376687ef9",
+      "07c769c0-5ab8-5c47-abac-7f63cff5d31e",
+      "63f8b6a1-d2ab-580b-928b-4d1bc1c6fc0d",
+      "e14ae4fe-1f90-532e-be3f-c4c3d617929f",
+      "4c79e1a9-bc24-578e-9e13-b6123c566416",
+      "6278b08f-67ec-5aa0-b051-00ce79bdaddc"
+    ],
+    "escalation_efficacy": {
+      "mode": "HYBRID",
+      "edge_confidence_bucket": "low",
+      "n_escalations": 6,
+      "agreement_rate": 0.5,
+      "edge_accuracy": 0.5,
+      "cloud_accuracy": 1.0,
+      "cloud_accuracy_improvement": 0.5
+    }
+  },
+  "C": {
+    "scenario": "C_edge_only",
+    "n_mode_transitions": 1,
+    "expected_trigger": "cpu",
+    "expected_from_to": [
+      "CLOUD_OPTIMISED",
+      "EDGE_ONLY"
+    ],
+    "n_inference_events_during_window": 5
+  },
+  "D": {
+    "scenario": "D_autonomous",
+    "expected_mode": "EDGE_AUTONOMOUS",
+    "n_events_during_outage": 8,
+    "n_anomalies_during_outage": 1,
+    "expected_gap_s": 2.0,
+    "outage_duration_s": 14.0
+  },
+  "E": {
+    "scenario": "E_recovery",
+    "n_mode_transitions": 2,
+    "expected_sequence": [
+      [
+        "EDGE_AUTONOMOUS",
+        "HYBRID"
+      ],
+      [
+        "HYBRID",
+        "CLOUD_OPTIMISED"
+      ]
+    ],
+    "expected_trigger": "recovery"
+  },
+  "F": {
+    "scenario": "F_confusion_matrix",
+    "n_events": 100,
+    "detection_performance": {
+      "mode": "CLOUD_OPTIMISED",
+      "model_version": "edge-v1.0-synthetic",
+      "tp": 80,
+      "fp": 5,
+      "fn": 10,
+      "tn": 5,
+      "precision": 0.9411764705882353,
+      "recall": 0.8888888888888888,
+      "f1": 0.9142857142857143
+    }
+  },
+  "cloudforest_smoke": {
+    "scenario": "cloudforest_smoke",
+    "n_pending_escalations": 5,
+    "inference_event_ids": [
+      "cd974f47-ea2b-5572-8dd9-752dfa7d40a7",
+      "a351aef3-59ae-575f-975e-e43fcee4613f",
+      "8b22861e-caea-5deb-8c75-91695da6cf37",
+      "e6e9968f-9cb1-5e30-9168-753408e344b2",
+      "9d51eff7-d015-5f07-86e1-7ead9aeccc71"
+    ],
+    "note": "Structural-only: after ml/cloud_forest/score_escalations.py runs, expect exactly one silver_cloud_validation_results row per inference_event_id above, with cloud_score in [0,1] and cloud_model_version starting with 'cloud_forest_bearing-v'. Exact cloud_anomaly/agrees_with_edge values are NOT asserted here -- they depend on the real trained model."
+  }
+}
