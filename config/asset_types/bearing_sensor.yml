@@ -27,8 +27,13 @@ fields:
     target: source_file
     type: string
 
+  # Renamed from `label` (2026-08) for the same reason as
+  # bearing_inference.yml: this is the DATASET GROUND TRUTH fault class from
+  # the CWRU recording, not a model output. Keeping it named `label`
+  # alongside model predictions invites exactly the confusion that makes F1
+  # evidence indefensible. Source path is unchanged.
   - source: payload.label
-    target: label
+    target: ground_truth_label
     type: string
 
   - source: payload.window_idx
@@ -62,3 +67,35 @@ fields:
   - source: payload.features.mean_abs
     target: mean_abs
     type: double
+
+  # -- escalation payload (2026-08) --------------------------------------
+  # Sampling rate is REQUIRED to interpret any spectral feature derived
+  # cloud-side: FFT bin index -> frequency depends on it, so without this
+  # column the spectral features in gold.bearing_ml_features would be
+  # uninterpretable and non-comparable across recordings. Emitted on every
+  # event (it is a property of the sensor, not of the escalation), so it
+  # remains available even when no waveform is attached.
+  - source: payload.sampling_rate_hz
+    target: sampling_rate_hz
+    type: integer
+
+  # NOTE ON THE RAW WAVEFORM. The waveform itself is deliberately NOT
+  # flattened into a Silver column here. It is an array of raw samples,
+  # only present on HYBRID-escalated events, and materialising it as a
+  # column would (a) require array support in
+  # dlt/common/helpers.py's SPARK_TYPE_MAP, and (b) widen every row of
+  # silver_bearing_sensor_telemetry for the minority of rows that carry
+  # one. It remains fully available to the cloud spectral-feature job at
+  # `payload.waveform` on
+  # industrial_ai.silver.cleaned_telemetry_events, which is where FFT
+  # features are computed. Bronze retains it verbatim either way.
+  #
+  # ARCHITECTURAL INTENT (edge-push on escalation): the edge attaches the
+  # raw window at escalation time on the existing one-way path. There is
+  # no cloud->edge request channel and no edge-side waveform retention
+  # buffer, so the invariant that the cloud is never a synchronous
+  # prerequisite for a live edge decision is preserved. Payload richness
+  # is an OUTPUT of the orchestration policy, which makes the resulting
+  # bandwidth difference a measured consequence of orchestration rather
+  # than a fixed transport cost -- see tests/integration/payload_sizing.py
+  # and gold.cloud_egress.

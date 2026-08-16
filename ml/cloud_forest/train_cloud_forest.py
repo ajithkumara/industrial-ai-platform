@@ -64,10 +64,10 @@ FEATURE_COLUMNS = ["rms", "peak", "crest", "kurtosis", "skew", "variance", "mean
 # distributed training framework, and scikit-learn's IsolationForest has
 # no native Spark equivalent worth adopting at this scale.
 
-df = spark.table(SILVER_TABLE).select(*FEATURE_COLUMNS, "label")
+df = spark.table(SILVER_TABLE).select(*FEATURE_COLUMNS, "ground_truth_label")
 pdf = df.toPandas().dropna(subset=FEATURE_COLUMNS)
 
-normal_only = pdf[pdf["label"] == "normal"]
+normal_only = pdf[pdf["ground_truth_label"] == "normal"]
 if len(normal_only) < 10:
     raise ValueError(
         f"Only {len(normal_only)} normal-labeled rows available in "

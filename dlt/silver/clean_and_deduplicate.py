@@ -25,9 +25,19 @@ from pyspark.sql.window import Window
     comment="Cleansed and deduplicated telemetry envelope from the bronze layer.",
     table_properties={"quality": "silver"},
 )
-@dlt.expect_or_drop("valid_event_id",   "event_id IS NOT NULL")
-@dlt.expect_or_drop("valid_device_id", "device_id IS NOT NULL")
-@dlt.expect_or_drop("valid_asset_type", "asset_type IS NOT NULL")
+# TRIM(...) <> '' in addition to IS NOT NULL: an empty (or whitespace-only)
+# string satisfies IS NOT NULL, so the previous expectations admitted events
+# with event_id="" into Silver. Because every such event shares that key,
+# the dedup window below would collapse unrelated events into one row --
+# silent data loss. Found by the DQ6 scenario in
+# tests/integration/data_quality_scenarios.py. This is the second of two
+# defences; the first is min_length=1 on shared/telemetry_event.py, which
+# rejects these at the consumer before they ever reach Bronze. Both are kept
+# so that anything reaching Bronze by another path (backfill, replay, direct
+# write) is still caught here.
+@dlt.expect_or_drop("valid_event_id",   "event_id IS NOT NULL AND TRIM(event_id) <> ''")
+@dlt.expect_or_drop("valid_device_id",  "device_id IS NOT NULL AND TRIM(device_id) <> ''")
+@dlt.expect_or_drop("valid_asset_type", "asset_type IS NOT NULL AND TRIM(asset_type) <> ''")
 @dlt.expect_or_drop("valid_timestamp",  "timestamp IS NOT NULL")
 def cleaned_telemetry_events():
     df = (

@@ -35,6 +35,7 @@ from pathlib import Path
 
 from config.logging import configure_logging
 from edge.base_producer import EventHubProducer
+from tests.integration.data_quality_scenarios import ALL_DQ_SCENARIOS
 from tests.integration.generate_bearing_events import (
     ALL_SCENARIOS,
     build_cloudforest_smoke_events,
@@ -118,6 +119,34 @@ def _print_verification_queries(all_expected: dict) -> None:
             f"precision={exp['precision']:.6f}, recall={exp['recall']:.6f}, f1={exp['f1']:.6f}"
         )
 
+    dq_keys = [k for k in all_expected if k.startswith("DQ")]
+    if dq_keys:
+        print(
+            "\n-- Data quality: which gate caught what --\n"
+            "-- (a) DLQ contents: browse ADLS <raw_folder>/_dlq/ for today's\n"
+            "--     partition. Expect exactly the GATE 1 scenarios there.\n"
+            "-- (b) Bronze retention vs Silver canonicalisation:"
+        )
+        for k in sorted(dq_keys, key=lambda s: int(s[2:])):
+            e = all_expected[k]
+            ids = [i for i in e["event_ids"] if i]
+            id_list = ", ".join(f"'{i}'" for i in ids) if ids else "'<none>'"
+            print(
+                f"\n-- {e['scenario']}  |  gate: {e['expected_gate'] or 'none (should pass)'}\n"
+                f"SELECT 'bronze' AS layer, count(*) AS n FROM industrial_ai.bronze.telemetry_bronze "
+                f"WHERE event_id IN ({id_list})\n"
+                f"UNION ALL SELECT 'silver', count(*) FROM industrial_ai.silver.cleaned_telemetry_events "
+                f"WHERE event_id IN ({id_list});\n"
+                f"-- expect bronze={e['bronze_rows']}, silver={e['cleaned_rows']}"
+            )
+            if e.get("expect_null_columns"):
+                cols = ", ".join(e["expect_null_columns"])
+                print(
+                    f"SELECT {cols} FROM industrial_ai.silver.silver_bearing_sensor_telemetry "
+                    f"WHERE event_id IN ({id_list});\n"
+                    f"-- expect {e['flattened_rows']} row(s), with {cols} NULL"
+                )
+
     if "cloudforest_smoke" in all_expected:
         exp = all_expected["cloudforest_smoke"]
         print(
@@ -151,11 +180,25 @@ def main() -> None:
             "(HYBRID events with no pre-built cloud_validation)."
         ),
     )
+    parser.add_argument(
+        "--data-quality",
+        action="store_true",
+        help=(
+            "Also send the Silver data-quality scenarios (DQ1-DQ11): "
+            "duplicates, malformed envelopes, unparseable timestamps, "
+            "unknown asset types, missing/uncastable payload fields, and "
+            "late events. Proves the Bronze/Silver contracts before ML "
+            "work depends on them."
+        ),
+    )
     args = parser.parse_args()
 
     selected = list(ALL_SCENARIOS.keys()) if args.all else args.scenarios
-    if not selected and not args.include_cloudforest_smoke:
-        parser.error("Specify scenario letters, --all, or --include-cloudforest-smoke.")
+    if not selected and not args.include_cloudforest_smoke and not args.data_quality:
+        parser.error(
+            "Specify scenario letters, --all, --include-cloudforest-smoke, "
+            "or --data-quality."
+        )
 
     configure_logging()
 
@@ -171,6 +214,16 @@ def main() -> None:
         print(f"3.{letter} Scenario {letter}: {len(events)} event(s) -- {expected['scenario']}")
         all_events.extend(events)
         all_expected[letter] = expected
+
+    if args.data_quality:
+        for key in sorted(ALL_DQ_SCENARIOS, key=lambda s: int(s[2:])):
+            events, expected = ALL_DQ_SCENARIOS[key]()
+            print(
+                f"3.{key} {expected['scenario']}: {len(events)} event(s) "
+                f"-- gate: {expected['expected_gate'] or 'none'}"
+            )
+            all_events.extend(events)
+            all_expected[key] = expected
 
     if args.include_cloudforest_smoke:
         events, expected = build_cloudforest_smoke_events()

@@ -17,6 +17,8 @@ venv/
 # Logs
 logs/
 
+docs/thesis/
+
 # Data
 data/
 screenshots/

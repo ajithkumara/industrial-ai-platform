@@ -41,10 +41,22 @@ class TelemetryEvent(BaseModel):
         Asset-specific telemetry fields — unvalidated at the envelope level.
     """
 
-    event_id: str = Field(..., description="UUID for the event")
-    device_id: str = Field(..., description="Source device / sensor ID")
-    asset_type: str = Field(..., description="Asset category")
-    timestamp: str = Field(..., description="ISO-8601 UTC timestamp")
+    # min_length=1 on the four identity fields closes a real defect found by
+    # the DQ6 data-quality scenario (tests/integration/data_quality_scenarios.py):
+    # an empty string is a perfectly valid `str` to Pydantic AND satisfies
+    # Spark's `IS NOT NULL`, so an event with event_id="" previously passed
+    # BOTH the consumer envelope gate and the Silver DLT expectation, reaching
+    # Silver with a meaningless primary key. Worse, every such event shares
+    # that key, so the dedup-by-event_id window in
+    # dlt/silver/clean_and_deduplicate.py would collapse unrelated events into
+    # a single row -- silent data loss. Rejecting at the consumer is the first
+    # of two defences; the second is the TRIM(...) <> '' expectation in the
+    # Silver notebook, which also protects any event that reaches Bronze by
+    # another route.
+    event_id: str = Field(..., min_length=1, description="UUID for the event")
+    device_id: str = Field(..., min_length=1, description="Source device / sensor ID")
+    asset_type: str = Field(..., min_length=1, description="Asset category")
+    timestamp: str = Field(..., min_length=1, description="ISO-8601 UTC timestamp")
     priority: str = Field(
         default="normal",
         description="Routing priority: low | normal | high | critical",

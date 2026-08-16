@@ -55,6 +55,12 @@ resources:
             path: ../../../dlt/gold/cloud_egress.py
         - notebook:
             path: ../../../dlt/gold/escalation_efficacy.py
+        # ML feature dataset + its quarantine complement. Reads only
+        # silver_bearing_sensor_telemetry, so it has no ordering dependency
+        # on the evidence tables above -- DLT builds the graph from
+        # dlt.read() calls, not from file order.
+        - notebook:
+            path: ../../../dlt/gold/bearing_ml_features.py
 
       serverless: true
 
