@@ -382,7 +382,19 @@ def scenario_d_autonomous() -> tuple[list[dict], dict]:
         inference_raw = {
             "ts": _ts(t),
             "seq": seq,
-            "sensor_id": "bearing.DE",
+            # Deliberately distinct from the "bearing.DE" id shared by
+            # scenarios A/B/C/F/CloudForest-smoke. gold.edge_autonomy
+            # windows purely by device_id + timestamp order (gaps-and-
+            # islands over consecutive EDGE_AUTONOMOUS rows); sharing an
+            # id with other scenarios interleaves their events into this
+            # scenario's timeline (all scenarios share one _BASE_TS) and
+            # fragments the intended single 8-event outage window into
+            # several 1-event windows. Must match the device_id used by
+            # this scenario's own context_snapshot/mode_transition events
+            # above ("edge-node-01"), since gold.mode_history and
+            # gold.edge_autonomy are expected to describe the same
+            # simulated device.
+            "sensor_id": "edge-node-01",
             "label": "normal",
             "anomaly": i == 4,  # one real anomaly detected mid-outage
             "anomaly_score": 0.75 if i == 4 else 0.1,
