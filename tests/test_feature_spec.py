@@ -91,6 +91,47 @@ def test_single_recording_edge_case_does_not_crash():
     assert spec.assign_split("ball", 1, 1) == spec.SPLIT_VALIDATION
 
 
+def test_four_normal_recordings_populate_all_three_splits():
+    """
+    Regression guard for the real CWRU dataset. Normal Baseline has
+    exactly 4 recordings and no more exist to download at this sample
+    rate. The general 60/20/20 ratio formula silently produces ZERO TEST
+    recordings at total=4 (position sequence 0, .25, .5, .75 -> 3 TRAIN /
+    1 VALIDATION / 0 TEST), which would make true negatives and false
+    positives unmeasurable in the final held-out evaluation. This is the
+    single most consequential split-policy bug this dataset could have
+    shipped with, since it would silently invalidate every precision/
+    specificity figure computed from TEST -- caught before real training
+    data was generated.
+    """
+    splits = [spec.assign_split("normal", r, 4) for r in range(1, 5)]
+    assert splits == [
+        spec.SPLIT_TRAIN,
+        spec.SPLIT_TRAIN,
+        spec.SPLIT_VALIDATION,
+        spec.SPLIT_TEST,
+    ]
+    counts = Counter(splits)
+    assert counts[spec.SPLIT_TEST] >= 1, (
+        "Normal class must have at least one TEST recording, or the final "
+        "confusion matrix cannot report true negatives or false positives."
+    )
+
+
+def test_small_normal_recording_counts_never_starve_a_split():
+    # total=2 and total=3 are lower-probability but should degrade
+    # gracefully rather than reproducing the total=4 bug at a different N.
+    assert [spec.assign_split("normal", r, 2) for r in range(1, 3)] == [
+        spec.SPLIT_TRAIN,
+        spec.SPLIT_VALIDATION,
+    ]
+    assert [spec.assign_split("normal", r, 3) for r in range(1, 4)] == [
+        spec.SPLIT_TRAIN,
+        spec.SPLIT_VALIDATION,
+        spec.SPLIT_TEST,
+    ]
+
+
 def test_out_of_range_rank_is_rejected():
     import pytest
 

@@ -115,7 +115,24 @@ def bearing_ml_features():
             "dataset_split",
             F.when(
                 F.col("ground_truth_label") == F.lit(NORMAL_LABEL),
-                F.when(F.col("position") < F.lit(NORMAL_TRAIN_RATIO), F.lit("TRAIN"))
+                # Small-N guarantee, mirrors ml/feature_spec.py::assign_split.
+                # CWRU's Normal Baseline has exactly 4 recordings and no more
+                # exist to download; the ratio formula below silently
+                # produces zero TEST recordings at total=4, making true
+                # negatives/false positives unmeasurable in the final
+                # evaluation. Below total=5, assign explicitly instead.
+                F.when(F.col("total") == F.lit(1), F.lit("TRAIN"))
+                .when(
+                    F.col("total") == F.lit(2),
+                    F.when(F.col("rank") == F.lit(1), F.lit("TRAIN")).otherwise(F.lit("VALIDATION")),
+                )
+                .when(
+                    F.col("total") <= F.lit(4),
+                    F.when(F.col("rank") <= F.col("total") - F.lit(2), F.lit("TRAIN"))
+                    .when(F.col("rank") == F.col("total") - F.lit(1), F.lit("VALIDATION"))
+                    .otherwise(F.lit("TEST")),
+                )
+                .when(F.col("position") < F.lit(NORMAL_TRAIN_RATIO), F.lit("TRAIN"))
                 .when(
                     F.col("position") < F.lit(NORMAL_TRAIN_RATIO + NORMAL_VALIDATION_RATIO),
                     F.lit("VALIDATION"),

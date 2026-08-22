@@ -177,6 +177,27 @@ def assign_split(label: str, rank: int, total: int) -> str:
     position = (rank - 1) / total
 
     if label == NORMAL_LABEL:
+        # Small-N guarantee. CWRU's Normal Baseline dataset has exactly 4
+        # recordings total (one per motor load) and no more exist to
+        # download at this sample rate. The ratio formula below silently
+        # produces ZERO TEST recordings at total=4 (position sequence
+        # 0, .25, .5, .75 -> 3 TRAIN / 1 VALIDATION / 0 TEST), which would
+        # make true negatives and false positives unmeasurable in the
+        # final held-out evaluation -- discovered when building the real
+        # CWRU dataset loader, 2026-08. Below total=5, assign explicitly
+        # so every split that can be populated is populated:
+        #   total=1 -> TRAIN                     (existing behaviour, unchanged)
+        #   total=2 -> TRAIN, VALIDATION
+        #   total=3 -> TRAIN, VALIDATION, TEST
+        #   total=4 -> TRAIN, TRAIN, VALIDATION, TEST
+        if total <= 4:
+            if total == 1:
+                return SPLIT_TRAIN
+            if total == 2:
+                return SPLIT_TRAIN if rank == 1 else SPLIT_VALIDATION
+            if rank <= total - 2:
+                return SPLIT_TRAIN
+            return SPLIT_VALIDATION if rank == total - 1 else SPLIT_TEST
         if position < NORMAL_TRAIN_RATIO:
             return SPLIT_TRAIN
         if position < NORMAL_TRAIN_RATIO + NORMAL_VALIDATION_RATIO:
