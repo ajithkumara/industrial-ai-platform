@@ -21,6 +21,25 @@ data by a single WHERE device_id = ... clause, and avoids ever repeating
 the device-id fragmentation bug found and fixed during the cloud
 acceptance run (see docs/runbooks/CLOUD_ACCEPTANCE_RUNBOOK.md §7.5).
 
+DATASET_RUN_ID: every event this loader builds also carries a
+dataset_run_id in its payload (see config/asset_types/bearing_sensor.yml),
+defaulting to DATASET_RUN_ID below. This is a mandatory safeguard, not a
+convenience -- without it, a real CWRU ingestion run lands in the exact
+same Bronze/Silver/Gold tables as the synthetic acceptance data with no
+column to separate them after the fact. Always filter Gold queries by
+dataset_run_id when working with real-data results.
+
+STATISTICAL NOTE -- READ BEFORE ANY EVALUATION CLAIM: this loader
+produces 2,245 windows, but the independent unit of observation is the
+RECORDING (28 of them), not the window. Adjacent windows within one
+recording are highly correlated (near-duplicate vibration segments), which
+is exactly why splitting happens at recording level (see
+ml/feature_spec.py's SPLIT POLICY docstring) rather than window level. Do
+not report "2,245 samples" as if it implies 2,245 independent
+observations anywhere in the thesis -- state the recording count (28)
+alongside the window count, every time, so a reader cannot mistake window
+volume for independent sample size.
+
 WINDOW SIZE: 2048 samples, non-overlapping. At 12 kHz this is ~0.17s per
 window, matching the size already used in the CloudForest smoke-test
 waveform and the payload-sizing analysis (tests/integration/payload_sizing.py).
@@ -46,6 +65,7 @@ from ml import feature_spec as spec
 WINDOW_SAMPLES = 2048
 SAMPLING_RATE_HZ = 12000
 DEVICE_ID = "bearing.CWRU"
+DATASET_RUN_ID = "cwru_exp_001"
 
 RAW_DIR = Path(__file__).resolve().parent.parent / "data" / "cwru" / "raw"
 
@@ -173,12 +193,20 @@ def assign_splits(filenames: list[str]) -> dict[str, str]:
     return result
 
 
-def build_events(raw_dir: Path = RAW_DIR) -> tuple[list[dict], list[RecordingWindows]]:
+def build_events(
+    raw_dir: Path = RAW_DIR, dataset_run_id: str = DATASET_RUN_ID
+) -> tuple[list[dict], list[RecordingWindows]]:
     """
     Returns (events, summary). events is a flat list of TelemetryEvent-shaped
     dicts (asset_type=bearing_sensor), ready to send via EventHubProducer.
     summary is one RecordingWindows entry per source file, for a sanity-check
     printout before anything is sent.
+
+    Every event's payload carries dataset_run_id (mandatory safeguard --
+    see module docstring), and deliberately does NOT carry a "waveform"
+    key: the spectral/escalation payload path is a separate, later
+    concern (CloudForest, HYBRID escalation) and must not be introduced
+    silently through this baseline real-data loader.
     """
     filenames = discover_recordings(raw_dir)
     splits = assign_splits(filenames)
@@ -206,6 +234,7 @@ def build_events(raw_dir: Path = RAW_DIR) -> tuple[list[dict], list[RecordingWin
                 "window_idx": window_idx,
                 "features": features,
                 "sampling_rate_hz": SAMPLING_RATE_HZ,
+                "dataset_run_id": dataset_run_id,
             }
             events.append(translate_sensor_record(raw))
 
@@ -248,4 +277,9 @@ if __name__ == "__main__":
     events, summary = build_events()
     splits = assign_splits([r.source_file for r in summary])
     print_summary(summary, splits)
-    print(f"\n{len(events)} events built (not sent).")
+    print(f"\ndataset_run_id: {DATASET_RUN_ID}")
+    print(f"{len(events)} events built from {len(summary)} recordings (not sent).")
+    print(
+        f"NOTE: {len(events)} windows, but {len(summary)} independent "
+        f"recordings -- report both, always, in any evaluation write-up."
+    )

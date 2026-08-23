@@ -193,6 +193,11 @@ def bearing_ml_features():
         "window_idx",
         "window_position",
         "sampling_rate_hz",
+        # NULL for synthetic acceptance-test data (which never sets it);
+        # populated for every real-data loader run. Filter on this column
+        # to isolate one experiment's data from synthetic and from any
+        # other real-data run -- see config/asset_types/bearing_sensor.yml.
+        "dataset_run_id",
         # -- split metadata --
         "dataset_split",
         F.col("trend_window_complete"),
@@ -244,6 +249,7 @@ def bearing_ml_features_quarantine():
             "source_file",
             "seq",
             "window_idx",
+            "dataset_run_id",
             "ground_truth_label",
             F.col("missing_columns").alias("quarantine_missing_columns"),
             F.lit("required column NULL").alias("quarantine_reason"),

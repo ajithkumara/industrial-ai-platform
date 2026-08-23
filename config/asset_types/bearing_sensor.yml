@@ -79,6 +79,21 @@ fields:
     target: sampling_rate_hz
     type: integer
 
+  # -- dataset provenance (2026-08) ---------------------------------------
+  # Mandatory safeguard before any real-data ingestion run: without an
+  # explicit run identifier carried on every event, a real CWRU batch
+  # lands in the exact same Bronze/Silver/Gold tables as the synthetic
+  # acceptance-test data already sitting there, with no column to tell
+  # them apart after the fact. NULLABLE (not in REQUIRED_NON_NULL in
+  # ml/feature_spec.py) rather than required, so the already-frozen
+  # synthetic acceptance run (git tag cloud-platform-accepted-v1, which
+  # never set this field) is not retroactively invalidated -- synthetic
+  # rows simply read dataset_run_id IS NULL. Every real-data loader
+  # (ml/cwru_loader.py) must set this on every event it builds.
+  - source: payload.dataset_run_id
+    target: dataset_run_id
+    type: string
+
   # NOTE ON THE RAW WAVEFORM. The waveform itself is deliberately NOT
   # flattened into a Silver column here. It is an array of raw samples,
   # only present on HYBRID-escalated events, and materialising it as a
