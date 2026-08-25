@@ -30,17 +30,29 @@
 # COMMAND ----------
 
 import json
+import sys
 
 import mlflow
 import mlflow.sklearn
 
-from ml.bearing_model_common import confusion_at_threshold, raw_scores_to_anomaly_scores
-
 # ---------------------------------------------------------------------------
 # Job parameters (Databricks widgets)
+#
+# repo_root: same sys.path fixup as train_bearing_isolation_forest.py --
+# a plain Jobs notebook has no built-in way to find its own deployed
+# location, so `import ml.bearing_model_common` needs this passed in via
+# the ${workspace.file_path} bundle substitution. See that script's
+# header comment for the full rationale.
 # ---------------------------------------------------------------------------
+dbutils.widgets.text("repo_root", "")
 dbutils.widgets.text("train_run_id", "")  # required: run_id printed by train_bearing_isolation_forest.py
 dbutils.widgets.text("gold_table", "industrial_ai.gold.bearing_ml_features")
+
+REPO_ROOT = dbutils.widgets.get("repo_root")
+if REPO_ROOT and REPO_ROOT not in sys.path:
+    sys.path.insert(0, REPO_ROOT)
+
+from ml.bearing_model_common import confusion_at_threshold, raw_scores_to_anomaly_scores  # noqa: E402
 
 TRAIN_RUN_ID = dbutils.widgets.get("train_run_id")
 GOLD_TABLE = dbutils.widgets.get("gold_table")

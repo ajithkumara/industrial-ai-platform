@@ -8,6 +8,17 @@
 # evaluation, not continuous streaming operations, and must not be folded
 # into industrial_ai_dlt_pipeline.
 #
+# COMPUTE: serverless, not a job_cluster with an explicit node_type_id.
+# 2026-08-24: two different VM SKUs (Standard_DS3_v2, then
+# Standard_D4ds_v5) both hit CLOUD_PROVIDER_RESOURCE_STOCKOUT in
+# CanadaCentral back to back -- a regional on-demand capacity shortage,
+# not a config mistake. databricks/resources/pipelines/dlt.yml already
+# runs serverless successfully in this same workspace (Databricks-managed
+# capacity pool, no VM SKU to stock out), so these two Jobs use the same
+# approach instead of a third guessed SKU. This workload (fit/score an
+# IsolationForest on ~2,245 pandas rows on the driver) has no real
+# cluster-sizing requirement anyway.
+#
 # Two independent, manual-only Jobs, deliberately NOT chained
 # automatically:
 #   - bearing_isolation_forest_train fits the model, selects + freezes
@@ -30,20 +41,22 @@ resources:
             notebook_path: ../../../ml/train_bearing_isolation_forest.py
             source: WORKSPACE
             base_parameters:
+              repo_root: "${workspace.file_path}"
               gold_table: "industrial_ai.gold.bearing_ml_features"
               dataset_run_id: "cwru_exp_001"
-              registered_model_name: "edge_bearing_isolation_forest"
+              registered_model_name: "industrial_ai.ml.edge_bearing_isolation_forest"
               n_estimators: "100"
               max_samples: "auto"
               contamination: "auto"
               random_seed: "42"
-          job_cluster_key: bearing_isolation_forest_cluster
-      job_clusters:
-        - job_cluster_key: bearing_isolation_forest_cluster
-          new_cluster:
-            spark_version: "15.4.x-scala2.12"
-            node_type_id: "Standard_DS3_v2"
-            num_workers: 1
+          environment_key: bearing_isolation_forest_env
+      environments:
+        - environment_key: bearing_isolation_forest_env
+          spec:
+            client: "1"
+            dependencies:
+              - scikit-learn
+              - mlflow
       # Manual/on-demand -- training is a deliberate action during thesis
       # evaluation, not a background schedule.
 
@@ -55,19 +68,21 @@ resources:
             notebook_path: ../../../ml/evaluate_bearing_model.py
             source: WORKSPACE
             base_parameters:
+              repo_root: "${workspace.file_path}"
               # No default for train_run_id -- must be supplied explicitly
               # at run time (Workflows UI "Run with different parameters",
               # or `databricks bundle run bearing_isolation_forest_evaluate
               # -t dev --params train_run_id=<run_id>`). See header comment.
               train_run_id: ""
               gold_table: "industrial_ai.gold.bearing_ml_features"
-          job_cluster_key: bearing_isolation_forest_cluster
-      job_clusters:
-        - job_cluster_key: bearing_isolation_forest_cluster
-          new_cluster:
-            spark_version: "15.4.x-scala2.12"
-            node_type_id: "Standard_DS3_v2"
-            num_workers: 1
+          environment_key: bearing_isolation_forest_env
+      environments:
+        - environment_key: bearing_isolation_forest_env
+          spec:
+            client: "1"
+            dependencies:
+              - scikit-learn
+              - mlflow
       # Manual/on-demand only -- see header comment. Never schedule this
       # job: a schedule would silently re-run the TEST evaluation
       # repeatedly against unchanged data, which is harmless numerically

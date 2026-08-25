@@ -43,29 +43,49 @@
 
 # COMMAND ----------
 
-import json
+import sys
 
 import mlflow
 import mlflow.sklearn
+from mlflow.models import infer_signature
 from sklearn.ensemble import IsolationForest
 
-from ml.bearing_model_common import (
+# ---------------------------------------------------------------------------
+# Job parameters (Databricks widgets)
+#
+# repo_root: unlike a DLT pipeline notebook (which resolves dlt/common via
+# an explicit spark.conf value -- see dlt/silver/flatten_payloads.py's
+# header comment on why __file__ doesn't work there), a plain Jobs
+# notebook has no built-in way to find its own deployed location on
+# sys.path. Passed in via the same ${workspace.file_path} bundle
+# substitution the DLT pipeline already uses (see
+# databricks/resources/pipelines/dlt.yml's asset_types_config_dir /
+# dlt_common_dir configuration values) so `import ml.bearing_model_common`
+# resolves against this job's own deployed copy of the repo, not whatever
+# happens to be importable in the notebook's default path.
+# ---------------------------------------------------------------------------
+dbutils.widgets.text("repo_root", "")
+dbutils.widgets.text("gold_table", "industrial_ai.gold.bearing_ml_features")
+dbutils.widgets.text("dataset_run_id", "cwru_exp_001")
+# Three-part Unity Catalog name required for model registration -- see
+# terraform/modules/unity_catalog/schema.tf's "ml" schema (added 2026-08
+# specifically for this; only bronze/silver/gold previously existed).
+dbutils.widgets.text("registered_model_name", "industrial_ai.ml.edge_bearing_isolation_forest")
+dbutils.widgets.text("n_estimators", "100")
+dbutils.widgets.text("max_samples", "auto")
+dbutils.widgets.text("contamination", "auto")
+dbutils.widgets.text("random_seed", "42")
+
+REPO_ROOT = dbutils.widgets.get("repo_root")
+if REPO_ROOT and REPO_ROOT not in sys.path:
+    sys.path.insert(0, REPO_ROOT)
+
+from ml.bearing_model_common import (  # noqa: E402  (must follow sys.path fixup above)
     FEATURE_COLUMNS,
     SCORE_SIGMOID_K,
     raw_scores_to_anomaly_scores,
     select_threshold_by_max_f1,
 )
-
-# ---------------------------------------------------------------------------
-# Job parameters (Databricks widgets)
-# ---------------------------------------------------------------------------
-dbutils.widgets.text("gold_table", "industrial_ai.gold.bearing_ml_features")
-dbutils.widgets.text("dataset_run_id", "cwru_exp_001")
-dbutils.widgets.text("registered_model_name", "edge_bearing_isolation_forest")
-dbutils.widgets.text("n_estimators", "100")
-dbutils.widgets.text("max_samples", "auto")
-dbutils.widgets.text("contamination", "auto")
-dbutils.widgets.text("random_seed", "42")
 
 GOLD_TABLE = dbutils.widgets.get("gold_table")
 DATASET_RUN_ID = dbutils.widgets.get("dataset_run_id")
@@ -185,6 +205,13 @@ with mlflow.start_run(run_name="edge_bearing_isolation_forest_train") as run:
 
     # Artifact form of the frozen threshold + everything evaluate_bearing_model.py
     # needs to reproduce this exact scoring pipeline without re-deriving it.
+    #
+    # BUGFIX: previously wrote to a hardcoded "/tmp/frozen_threshold.json"
+    # then log_artifact()'d it, which raised PermissionError on serverless
+    # compute (serverless notebook execution does not grant write access to
+    # the container's root /tmp). mlflow.log_dict() serialises the dict to
+    # a run artifact directly, with no local filesystem write at all --
+    # simpler and portable across every compute type.
     frozen = {
         "dataset_run_id": DATASET_RUN_ID,
         "feature_columns": FEATURE_COLUMNS,
@@ -193,14 +220,32 @@ with mlflow.start_run(run_name="edge_bearing_isolation_forest_train") as run:
         "selected_threshold": selection.threshold,
         "validation_metrics": selection.validation_confusion.as_dict(),
     }
-    with open("/tmp/frozen_threshold.json", "w") as f:
-        json.dump(frozen, f, indent=2)
-    mlflow.log_artifact("/tmp/frozen_threshold.json")
+    mlflow.log_dict(frozen, "frozen_threshold.json")
+
+    # BUGFIX: Unity Catalog model registry rejects any model logged
+    # without a signature ("Model passed for registration did not contain
+    # any signature metadata") -- unlike the legacy workspace registry,
+    # UC validates this at registration time, not just at serving time.
+    #
+    # Output is inferred from model.decision_function(), NOT model.predict():
+    # the actual scoring contract (ml/evaluate_bearing_model.py and
+    # ml/cloud_forest/score_escalations.py) consumes the continuous
+    # decision_function score and passes it through
+    # raw_scores_to_anomaly_scores(). model.predict()'s +1/-1 label is
+    # never used anywhere in this platform, so signing the model against it
+    # would document an interface no consumer actually calls. Inferring
+    # from real TRAIN data means the signature can never drift from what
+    # the model truly accepts/returns.
+    signature = infer_signature(
+        train_pdf[FEATURE_COLUMNS], model.decision_function(train_pdf[FEATURE_COLUMNS])
+    )
 
     mlflow.sklearn.log_model(
         model,
         artifact_path="edge_bearing_isolation_forest_model",
         registered_model_name=REGISTERED_MODEL_NAME,
+        signature=signature,
+        input_example=train_pdf[FEATURE_COLUMNS].head(5),
     )
 
     print(
