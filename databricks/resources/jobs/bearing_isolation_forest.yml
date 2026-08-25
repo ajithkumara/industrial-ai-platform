@@ -1,0 +1,75 @@
+# ACTIVE / DEPLOYED -- same pattern as cloud_forest.yml (see that file's
+# header comment for why standalone Jobs, not the DLT pipeline, are the
+# correct execution vehicle for training/evaluation notebooks).
+#
+# ml/train_bearing_isolation_forest.py and ml/evaluate_bearing_model.py
+# are plain PySpark notebooks (no `import dlt`) -- training and one-time
+# TEST evaluation are deliberate, on-demand actions during thesis
+# evaluation, not continuous streaming operations, and must not be folded
+# into industrial_ai_dlt_pipeline.
+#
+# Two independent, manual-only Jobs, deliberately NOT chained
+# automatically:
+#   - bearing_isolation_forest_train fits the model, selects + freezes
+#     the VALIDATION-only threshold, and prints/logs the train_run_id.
+#   - bearing_isolation_forest_evaluate requires that train_run_id as an
+#     explicit parameter (no default) and performs the one-time TEST
+#     evaluation. Requiring a human to copy the run_id across is
+#     intentional friction -- it is the same discipline
+#     evaluate_bearing_model.py enforces in code (see that file's module
+#     docstring): a TEST evaluation must always be traceable to one
+#     specific, deliberate training run, never "whatever trained most
+#     recently."
+resources:
+  jobs:
+    bearing_isolation_forest_train:
+      name: "Edge Bearing Isolation Forest — Train + Freeze Threshold"
+      tasks:
+        - task_key: train_bearing_isolation_forest
+          notebook_task:
+            notebook_path: ../../../ml/train_bearing_isolation_forest.py
+            source: WORKSPACE
+            base_parameters:
+              gold_table: "industrial_ai.gold.bearing_ml_features"
+              dataset_run_id: "cwru_exp_001"
+              registered_model_name: "edge_bearing_isolation_forest"
+              n_estimators: "100"
+              max_samples: "auto"
+              contamination: "auto"
+              random_seed: "42"
+          job_cluster_key: bearing_isolation_forest_cluster
+      job_clusters:
+        - job_cluster_key: bearing_isolation_forest_cluster
+          new_cluster:
+            spark_version: "15.4.x-scala2.12"
+            node_type_id: "Standard_DS3_v2"
+            num_workers: 1
+      # Manual/on-demand -- training is a deliberate action during thesis
+      # evaluation, not a background schedule.
+
+    bearing_isolation_forest_evaluate:
+      name: "Edge Bearing Isolation Forest — TEST Evaluation (frozen threshold)"
+      tasks:
+        - task_key: evaluate_bearing_model
+          notebook_task:
+            notebook_path: ../../../ml/evaluate_bearing_model.py
+            source: WORKSPACE
+            base_parameters:
+              # No default for train_run_id -- must be supplied explicitly
+              # at run time (Workflows UI "Run with different parameters",
+              # or `databricks bundle run bearing_isolation_forest_evaluate
+              # -t dev --params train_run_id=<run_id>`). See header comment.
+              train_run_id: ""
+              gold_table: "industrial_ai.gold.bearing_ml_features"
+          job_cluster_key: bearing_isolation_forest_cluster
+      job_clusters:
+        - job_cluster_key: bearing_isolation_forest_cluster
+          new_cluster:
+            spark_version: "15.4.x-scala2.12"
+            node_type_id: "Standard_DS3_v2"
+            num_workers: 1
+      # Manual/on-demand only -- see header comment. Never schedule this
+      # job: a schedule would silently re-run the TEST evaluation
+      # repeatedly against unchanged data, which is harmless numerically
+      # but defeats the "TEST is touched exactly once, deliberately"
+      # discipline this whole methodology is built around.

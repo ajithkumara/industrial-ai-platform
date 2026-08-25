@@ -32,6 +32,11 @@ include:
   # bronze.yml/silver.yml/gold.yml's excluded pattern above. See
   # databricks/resources/jobs/cloud_forest.yml header comment.
   - databricks/resources/jobs/cloud_forest.yml
+  # Edge bearing Isolation Forest baseline: train + freeze threshold on
+  # VALIDATION, then a separate one-time TEST evaluation job. Same
+  # rationale as cloud_forest.yml above. See
+  # databricks/resources/jobs/bearing_isolation_forest.yml header comment.
+  - databricks/resources/jobs/bearing_isolation_forest.yml
 
 workspace:
   host: https://adb-7405614704586834.14.azuredatabricks.net
