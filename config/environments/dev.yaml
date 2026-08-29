@@ -1,7 +1,13 @@
+# Config-as-code for the dev environment (consumed by shared/config.load_config).
+# Subscription-specific values (workspace_id, databricks_host, storage_account_name)
+# are OUTPUTS of Terraform (see terraform/environments/dev outputs) -- populate
+# them from `terraform output` after apply rather than assuming fixed values,
+# so this file stays valid across subscriptions. catalog_name is the fixed
+# Unity Catalog name Terraform creates ("industrial_ai"), not the workspace id.
 environment: "dev"
-workspace_id: "7405619577623735"
-databricks_host: "https://adb-7405619577623735.15.azuredatabricks.net"
-catalog_name: "dbw_industrial_ai_dev_7405619577623735"
-storage_account_name: "stindustrialaidev2026"
+workspace_id: "<from terraform output databricks_workspace_id>"
+databricks_host: "<from terraform output databricks_workspace_url>"
+catalog_name: "industrial_ai"
+storage_account_name: "<from terraform output storage_account_name>"
 eventhub_namespace: "evhns-industrial-ai-dev"
 eventhub_name: "evh-industrial-ai-dev"
