@@ -15,7 +15,7 @@
 #   - databricks CLI authenticated (databricks auth login ...)
 #   - azcopy installed  (https://learn.microsoft.com/en-us/azure/storage/common/storage-use-azcopy-v10)
 
-$ErrorActionPreference = "Stop"
+$ErrorActionPreference = "Continue"
 $TIMESTAMP = Get-Date -Format "yyyyMMdd_HHmmss"
 $BACKUP_ROOT = "$env:USERPROFILE\Desktop\industrial-ai-backup-$TIMESTAMP"
 New-Item -ItemType Directory -Force -Path $BACKUP_ROOT | Out-Null
@@ -34,6 +34,8 @@ Write-Host "    OK: .env"
 Write-Host "`n[2/5] Backing up Terraform state files ..." -ForegroundColor Yellow
 
 # Local state (unity_catalog and root)
+New-Item -ItemType Directory -Force -Path "$BACKUP_ROOT\terraform-state" | Out-Null
+
 $tfStates = @(
     "terraform\terraform.tfstate",
     "terraform\terraform.tfstate.backup",
@@ -52,15 +54,18 @@ Write-Host "    Downloading remote state from Azure Storage ..."
 $STORAGE_ACCOUNT = "stterraformstate2026aj"
 $CONTAINER       = "terraformstate"
 $KEY             = "dev.terraform.tfstate"
-New-Item -ItemType Directory -Force -Path "$BACKUP_ROOT\terraform-state" | Out-Null
 
-az storage blob download `
-    --account-name $STORAGE_ACCOUNT `
-    --container-name $CONTAINER `
-    --name $KEY `
-    --file "$BACKUP_ROOT\terraform-state\remote_dev.terraform.tfstate" `
-    --auth-mode login 2>&1 | Write-Host
-Write-Host "    OK: remote dev.terraform.tfstate"
+try {
+    az storage blob download `
+        --account-name $STORAGE_ACCOUNT `
+        --container-name $CONTAINER `
+        --name $KEY `
+        --file "$BACKUP_ROOT\terraform-state\remote_dev.terraform.tfstate" `
+        --auth-mode login 2>&1 | Write-Host
+    Write-Host "    OK: remote dev.terraform.tfstate"
+} catch {
+    Write-Host "    WARNING: Remote state download failed ($_). Skipping -- local copy already saved." -ForegroundColor Yellow
+}
 
 # -----------------------------------------------------------------------
 # 3. MLflow artifacts (trained model + frozen threshold)
