@@ -72,19 +72,27 @@ PowerShell; adjust paths for bash.
 - An Azure subscription where you are **Owner**.
 - `az login` and `az account set --subscription <NEW_SUB_ID>`.
 
-### 1. Bootstrap remote Terraform state (once per subscription)
+### 1. Register resource providers (once per new subscription, MANUAL)
+A brand-new subscription has most resource providers unregistered:
+```powershell
+foreach ($ns in "Microsoft.Databricks","Microsoft.EventHub","Microsoft.Storage",
+  "Microsoft.OperationalInsights","Microsoft.Insights","Microsoft.ManagedIdentity",
+  "Microsoft.Network","Microsoft.KeyVault") { az provider register --namespace $ns }
+```
+
+### 2. Bootstrap remote Terraform state (once per subscription)
 ```powershell
 cd terraform\bootstrap
 terraform init
-terraform apply    # creates rg-terraform + a state storage account + container
+terraform apply    # creates rg-terraform + a globally-unique state storage
+                   # account + container, and auto-generates
+                   # environments/*/backend.hcl with the account name
 ```
-Note the storage account name it outputs; put it in each
-`terraform/environments/<env>/backend.hcl` (key stays per-env).
+The storage account name is auto-generated (random suffix) and written into
+each `environments/<env>/backend.hcl` — no manual copy/paste. Note the
+`state_storage_account_name` output for reference.
 
-> MANUAL PREREQUISITE: storage account names are globally unique. If the
-> bootstrap name is taken, choose another and update `backend.hcl`.
-
-### 2. Provision infrastructure
+### 3. Provision infrastructure
 ```powershell
 cd ..\environments\dev
 terraform init -backend-config=backend.hcl
@@ -96,14 +104,14 @@ This creates the RG, ADLS Gen2, Event Hubs, identity + RBAC, the Databricks
 workspace, and Unity Catalog (catalog `industrial_ai`; schemas
 `bronze/silver/gold/serving/ml`).
 
-### 3. Capture outputs
+### 4. Capture outputs
 ```powershell
 terraform output                                   # human review
 $DBX = terraform output -raw databricks_workspace_url
 $SA  = terraform output -raw storage_account_name
 ```
 
-### 4. Configure runtime secrets (MANUAL, never committed)
+### 5. Configure runtime secrets (MANUAL, never committed)
 Populate `.env` at the repo root from the sensitive outputs:
 ```powershell
 terraform output -raw eventhub_producer_connection_string   # -> EVENTHUB_CONNECTION_STRING
@@ -111,7 +119,7 @@ terraform output -raw eventhub_consumer_connection_string   # -> EVENTHUB_CONSUM
 # STORAGE_ACCOUNT_NAME = $SA, etc. (see .env.example)
 ```
 
-### 5. Deploy Databricks workloads (DAB)
+### 6. Deploy Databricks workloads (DAB)
 ```powershell
 cd ..\..\..                     # repo root (where databricks.yml lives)
 databricks auth login --host $DBX
@@ -121,18 +129,18 @@ databricks bundle validate -t dev
 databricks bundle deploy   -t dev
 ```
 
-### 6. Run the pipeline + jobs
+### 7. Run the pipeline + jobs
 ```powershell
 databricks bundle run industrial_ai_dlt_pipeline -t dev
 # ML (deliberate, on-demand):
 databricks bundle run bearing_isolation_forest_train -t dev
 ```
 
-### 7. Smoke test
+### 8. Smoke test
 Run the cloud smoke checks in `docs/deployment.md` §Smoke test (below) or the
 verification SQL in `docs/verification/`.
 
-### 8. Tear down (when done / to save credit)
+### 9. Tear down (when done / to save credit)
 ```powershell
 cd terraform\environments\dev ; terraform destroy -var-file=terraform.tfvars
 cd ..\..\bootstrap            ; terraform destroy

@@ -26,6 +26,12 @@ variable "tags" {
   }
 }
 
+variable "storage_account_name_override" {
+  type        = string
+  description = "Override the computed storage account name. Use when the default name is still reserved by a previous Azure subscription."
+  default     = ""
+}
+
 variable "databricks_principal" {
   type        = string
   description = "The principal (user or group) to grant Unity Catalog permissions to. Defaults to current user if empty."
