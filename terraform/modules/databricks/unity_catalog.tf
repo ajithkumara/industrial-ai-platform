@@ -41,9 +41,16 @@ resource "databricks_catalog" "industrial_ai" {
   depends_on = [databricks_external_location.industrial_ai_lake]
 }
 
-# Unity Catalog Schemas for Medallion Layers & Serving
+# Unity Catalog Schemas for Medallion Layers, Serving & ML registry.
+#
+# "ml" holds registered models (Isolation Forest baseline, CloudForest). It is
+# REQUIRED by ml/train_bearing_isolation_forest.py, which registers models
+# under the three-part UC name industrial_ai.ml.<model>. Without it, a fresh
+# deployment fails model registration with SCHEMA_DOES_NOT_EXIST (this was
+# previously worked around by a manual `CREATE SCHEMA` -- now provisioned as
+# code so the platform is reproducible end to end).
 resource "databricks_schema" "schemas" {
-  for_each     = toset(["bronze", "silver", "gold", "serving"])
+  for_each     = toset(["bronze", "silver", "gold", "serving", "ml"])
   catalog_name = databricks_catalog.industrial_ai.name
   name         = each.value
   comment      = "Schema for ${each.value} layer"

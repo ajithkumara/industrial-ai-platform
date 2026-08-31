@@ -45,15 +45,23 @@ from pyspark.sql import functions as F
 dbutils.widgets.text("registered_model_name", "cloud_forest_bearing")
 dbutils.widgets.text("model_stage_or_version", "latest")
 dbutils.widgets.text("anomaly_threshold", "0.60")
-dbutils.widgets.text(
-    "bronze_path",
-    "abfss://datalake@stindustrialaidev2026.dfs.core.windows.net/raw/telemetry/",
-)
+# PORTABILITY: no hardcoded storage account. The deployed Job supplies
+# bronze_path from bundle variables (see databricks/resources/jobs/
+# cloud_forest.yml, sourced from the Terraform output storage_account_name).
+# Empty default => fail fast if run manually without supplying it, rather than
+# silently targeting a decommissioned account.
+dbutils.widgets.text("bronze_path", "")
 
 REGISTERED_MODEL_NAME = dbutils.widgets.get("registered_model_name")
 MODEL_STAGE_OR_VERSION = dbutils.widgets.get("model_stage_or_version")
 ANOMALY_THRESHOLD = float(dbutils.widgets.get("anomaly_threshold"))
 BRONZE_PATH = dbutils.widgets.get("bronze_path")
+if not BRONZE_PATH:
+    raise ValueError(
+        "bronze_path is empty -- supply it via the Job base_parameters "
+        "(databricks/resources/jobs/cloud_forest.yml sources it from the "
+        "Terraform output storage_account_name)."
+    )
 
 FEATURE_COLUMNS = ["rms", "peak", "crest", "kurtosis", "skew", "variance", "mean_abs"]
 

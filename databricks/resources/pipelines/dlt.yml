@@ -91,10 +91,12 @@ resources:
         # and the ingest_raw_events.py comment this replaces) is
         # raw/telemetry. Now genuinely consumed by
         # dlt/bronze/ingest_raw_events.py via spark.conf.get("bronze_path").
-        bronze_path: "abfss://datalake@stindustrialaidev2026.dfs.core.windows.net/raw/telemetry/"
-        # Neutralise any stale workspace-level account-key configs for both storage accounts.
-        # Unity Catalog External Location (via Access Connector MSI) is the correct auth path.
-        spark.hadoop.fs.azure.account.auth.type.stindustrialaidev2026.dfs.core.windows.net: "OAuth"
-        spark.hadoop.fs.azure.account.oauth.provider.type.stindustrialaidev2026.dfs.core.windows.net: "org.apache.hadoop.fs.azurebfs.oauth2.MsiTokenProvider"
-        spark.hadoop.fs.azure.account.auth.type.stmscaidev2026.dfs.core.windows.net: "OAuth"
-        spark.hadoop.fs.azure.account.oauth.provider.type.stmscaidev2026.dfs.core.windows.net: "org.apache.hadoop.fs.azurebfs.oauth2.MsiTokenProvider"
+        # PORTABILITY: storage account is the ${var.storage_account_name}
+        # bundle variable (declared in ../../../databricks.yml), sourced from
+        # the Terraform output `storage_account_name`. No account name is
+        # hardcoded here, so the same pipeline deploys against any subscription.
+        bronze_path: "abfss://${var.storage_container}@${var.storage_account_name}.dfs.core.windows.net/raw/telemetry/"
+        # Force the ABFS driver to authenticate via the Unity Catalog External
+        # Location / Access Connector managed identity (OAuth), not account keys.
+        spark.hadoop.fs.azure.account.auth.type.${var.storage_account_name}.dfs.core.windows.net: "OAuth"
+        spark.hadoop.fs.azure.account.oauth.provider.type.${var.storage_account_name}.dfs.core.windows.net: "org.apache.hadoop.fs.azurebfs.oauth2.MsiTokenProvider"

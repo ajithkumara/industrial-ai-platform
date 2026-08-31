@@ -38,14 +38,34 @@ include:
   # databricks/resources/jobs/bearing_isolation_forest.yml header comment.
   - databricks/resources/jobs/bearing_isolation_forest.yml
 
-workspace:
-  host: https://adb-7405614704586834.14.azuredatabricks.net
-  profile: canada-central-dev
+# PORTABILITY: the workspace host is NOT hardcoded here. The Databricks CLI
+# resolves it from the DATABRICKS_HOST environment variable (or a saved profile
+# from `databricks auth login`). Set it from the Terraform output before deploying:
+#
+#   $env:DATABRICKS_HOST = "https://$(terraform output -raw databricks_workspace_url)"
+#   $env:DATABRICKS_BUNDLE_VAR_storage_account_name = terraform output -raw storage_account_name
+#   databricks bundle deploy -t dev
+#
+# In CI, set DATABRICKS_HOST + DATABRICKS_CLIENT_ID + DATABRICKS_CLIENT_SECRET
+# as repo secrets for a service principal OAuth flow.
+# No personal profile is committed here.
+variables:
+  storage_account_name:
+    description: >-
+      ADLS Gen2 storage account backing the lakehouse. Source it from the
+      Terraform output `storage_account_name`. Consumed by
+      databricks/resources/pipelines/dlt.yml (bronze_path + ABFS OAuth config).
+  storage_container:
+    description: "ADLS Gen2 filesystem/container for the medallion lake."
+    default: "datalake"
 
 targets:
   dev:
     mode: development
     default: true
+
+  test:
+    mode: development
 
   prod:
     mode: production

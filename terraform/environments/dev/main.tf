@@ -2,8 +2,14 @@ locals {
   name_suffix              = "${var.project_name}-${var.environment}"
   name_suffix_alphanumeric = replace(local.name_suffix, "-", "")
 
-  # Ensure storage account name is valid (lowercase, alphanumeric, max 24 chars)
-  storage_account_name = lower(substr("st${local.name_suffix_alphanumeric}2026", 0, 24))
+  # Ensure storage account name is valid (lowercase, alphanumeric, max 24 chars).
+  # If storage_account_name_override is set in tfvars, use it directly (needed when
+  # Azure is still holding the default name from a previous subscription).
+  storage_account_name = (
+    var.storage_account_name_override != "" ?
+    var.storage_account_name_override :
+    lower(substr("st${local.name_suffix_alphanumeric}2026", 0, 24))
+  )
 }
 
 module "resource_group" {

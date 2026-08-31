@@ -1,12 +1,10 @@
-# Local backend config for local development and testing.
-# To migrate to Azure Remote Backend, uncomment the block below and run:
-# terraform init -migrate-state
-
+# Remote state on Azure Storage. Values are supplied at init time from the
+# auto-generated backend.hcl (produced by terraform/bootstrap), so no
+# subscription-specific storage account name is hardcoded here:
+#
+#   terraform init -backend-config=backend.hcl
+#
+# This keeps the same code valid across subscriptions/environments.
 terraform {
-  backend "azurerm" {
-    resource_group_name  = "rg-terraform"
-    storage_account_name = "stterraformstate2026aj"
-    container_name       = "terraformstate"
-    key                  = "dev.terraform.tfstate"
-  }
+  backend "azurerm" {}
 }

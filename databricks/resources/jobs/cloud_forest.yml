@@ -45,6 +45,13 @@ resources:
           notebook_task:
             notebook_path: ../../../ml/cloud_forest/score_escalations.py
             source: WORKSPACE
+            base_parameters:
+              # PORTABILITY: supply the ADLS landing path from bundle variables
+              # (declared in ../../../databricks.yml, sourced from the Terraform
+              # output storage_account_name) instead of the notebook's
+              # hardcoded default -- so scoring targets the right account in any
+              # subscription. See databricks/resources/pipelines/dlt.yml.
+              bronze_path: "abfss://${var.storage_container}@${var.storage_account_name}.dfs.core.windows.net/raw/telemetry/"
           job_cluster_key: cloud_forest_cluster
       job_clusters:
         - job_cluster_key: cloud_forest_cluster

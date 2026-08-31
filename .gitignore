@@ -56,3 +56,5 @@ local/checkpoints*.json
 .env
 .env.*
 !.env.example
+
+terraform/environments/dev/current-state.json

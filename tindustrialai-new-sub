@@ -1,0 +1,171 @@
+[1mdiff --git a/config/environments/dev.yaml b/config/environments/dev.yaml[m
+[1mindex 6f78866..87d0936 100644[m
+[1m--- a/config/environments/dev.yaml[m
+[1m+++ b/config/environments/dev.yaml[m
+[36m@@ -1,7 +1,13 @@[m
+[32m+[m[32m# Config-as-code for the dev environment (consumed by shared/config.load_config).[m
+[32m+[m[32m# Subscription-specific values (workspace_id, databricks_host, storage_account_name)[m
+[32m+[m[32m# are OUTPUTS of Terraform (see terraform/environments/dev outputs) -- populate[m
+[32m+[m[32m# them from `terraform output` after apply rather than assuming fixed values,[m
+[32m+[m[32m# so this file stays valid across subscriptions. catalog_name is the fixed[m
+[32m+[m[32m# Unity Catalog name Terraform creates ("industrial_ai"), not the workspace id.[m
+ environment: "dev"[m
+[31m-workspace_id: "7405619577623735"[m
+[31m-databricks_host: "https://adb-7405619577623735.15.azuredatabricks.net"[m
+[31m-catalog_name: "dbw_industrial_ai_dev_7405619577623735"[m
+[31m-storage_account_name: "stindustrialaidev2026"[m
+[32m+[m[32mworkspace_id: "<from terraform output databricks_workspace_id>"[m
+[32m+[m[32mdatabricks_host: "<from terraform output databricks_workspace_url>"[m
+[32m+[m[32mcatalog_name: "industrial_ai"[m
+[32m+[m[32mstorage_account_name: "<from terraform output storage_account_name>"[m
+ eventhub_namespace: "evhns-industrial-ai-dev"[m
+ eventhub_name: "evh-industrial-ai-dev"[m
+[1mdiff --git a/databricks.yml b/databricks.yml[m
+[1mindex 10ac9ea..26ea6f3 100644[m
+[1m--- a/databricks.yml[m
+[1m+++ b/databricks.yml[m
+[36m@@ -38,14 +38,44 @@[m [minclude:[m
+   # databricks/resources/jobs/bearing_isolation_forest.yml header comment.[m
+   - databricks/resources/jobs/bearing_isolation_forest.yml[m
+ [m
+[31m-workspace:[m
+[31m-  host: https://adb-7405614704586834.14.azuredatabricks.net[m
+[31m-  profile: canada-central-dev[m
+[32m+[m[32m# PORTABILITY: the workspace host is set PER TARGET via the `databricks_host`[m
+[32m+[m[32m# bundle variable below, NOT hardcoded globally. This lets the same bundle[m
+[32m+[m[32m# deploy to any workspace (dev/test/prod, or a brand-new subscription) with no[m
+[32m+[m[32m# edit to shared config -- supply the value from the Terraform output[m
+[32m+[m[32m# `databricks_workspace_url` at deploy time, e.g.:[m
+[32m+[m[32m#   $env:DATABRICKS_BUNDLE_VAR_databricks_host = terraform output -raw databricks_workspace_url[m
+[32m+[m[32m#   databricks bundle deploy -t dev[m
+[32m+[m[32m# Authentication is resolved by the Databricks CLI (DATABRICKS_HOST /[m
+[32m+[m[32m# DATABRICKS_TOKEN env vars, an OAuth service principal in CI, or[m
+[32m+[m[32m# `databricks auth login` locally). No personal profile is committed here.[m
+[32m+[m[32mvariables:[m
+[32m+[m[32m  databricks_host:[m
+[32m+[m[32m    description: >-[m
+[32m+[m[32m      Databricks workspace URL for the selected target. Source it from the[m
+[32m+[m[32m      Terraform output `databricks_workspace_url`. Set via[m
+[32m+[m[32m      DATABRICKS_BUNDLE_VAR_databricks_host or `--var databricks_host=...`.[m
+[32m+[m[32m  storage_account_name:[m
+[32m+[m[32m    description: >-[m
+[32m+[m[32m      ADLS Gen2 storage account backing the lakehouse. Source it from the[m
+[32m+[m[32m      Terraform output `storage_account_name`. Consumed by[m
+[32m+[m[32m      databricks/resources/pipelines/dlt.yml (bronze_path + ABFS OAuth config).[m
+[32m+[m[32m  storage_container:[m
+[32m+[m[32m    description: "ADLS Gen2 filesystem/container for the medallion lake."[m
+[32m+[m[32m    default: "datalake"[m
+ [m
+ targets:[m
+   dev:[m
+     mode: development[m
+     default: true[m
+[32m+[m[32m    workspace:[m
+[32m+[m[32m      host: ${var.databricks_host}[m
+[32m+[m
+[32m+[m[32m  test:[m
+[32m+[m[32m    mode: development[m
+[32m+[m[32m    workspace:[m
+[32m+[m[32m      host: ${var.databricks_host}[m
+ [m
+   prod:[m
+     mode: production[m
+[32m+[m[32m    workspace:[m
+[32m+[m[32m      host: ${var.databricks_host}[m
+[1mdiff --git a/databricks/resources/jobs/cloud_forest.yml b/databricks/resources/jobs/cloud_forest.yml[m
+[1mindex 2c24916..b228cca 100644[m
+[1m--- a/databricks/resources/jobs/cloud_forest.yml[m
+[1m+++ b/databricks/resources/jobs/cloud_forest.yml[m
+[36m@@ -45,6 +45,13 @@[m [mresources:[m
+           notebook_task:[m
+             notebook_path: ../../../ml/cloud_forest/score_escalations.py[m
+             source: WORKSPACE[m
+[32m+[m[32m            base_parameters:[m
+[32m+[m[32m              # PORTABILITY: supply the ADLS landing path from bundle variables[m
+[32m+[m[32m              # (declared in ../../../databricks.yml, sourced from the Terraform[m
+[32m+[m[32m              # output storage_account_name) instead of the notebook's[m
+[32m+[m[32m              # hardcoded default -- so scoring targets the right account in any[m
+[32m+[m[32m              # subscription. See databricks/resources/pipelines/dlt.yml.[m
+[32m+[m[32m              bronze_path: "abfss://${var.storage_container}@${var.storage_account_name}.dfs.core.windows.net/raw/telemetry/"[m
+           job_cluster_key: cloud_forest_cluster[m
+       job_clusters:[m
+         - job_cluster_key: cloud_forest_cluster[m
+[1mdiff --git a/databricks/resources/pipelines/dlt.yml b/databricks/resources/pipelines/dlt.yml[m
+[1mindex 952f46a..83f75cd 100644[m
+[1m--- a/databricks/resources/pipelines/dlt.yml[m
+[1m+++ b/databricks/resources/pipelines/dlt.yml[m
+[36m@@ -91,10 +91,12 @@[m [mresources:[m
+         # and the ingest_raw_events.py comment this replaces) is[m
+         # raw/telemetry. Now genuinely consumed by[m
+         # dlt/bronze/ingest_raw_events.py via spark.conf.get("bronze_path").[m
+[31m-        bronze_path: "abfss://datalake@stindustrialaidev2026.dfs.core.windows.net/raw/telemetry/"[m
+[31m-        # Neutralise any stale workspace-level account-key configs for both storage accounts.[m
+[31m-        # Unity Catalog External Location (via Access Connector MSI) is the correct auth path.[m
+[31m-        spark.hadoop.fs.azure.account.auth.type.stindustrialaidev2026.dfs.core.windows.net: "OAuth"[m
+[31m-        spark.hadoop.fs.azure.account.oauth.provider.type.stindustrialaidev2026.dfs.core.windows.net: "org.apache.hadoop.fs.azurebfs.oauth2.MsiTokenProvider"[m
+[31m-        spark.hadoop.fs.azure.account.auth.type.stmscaidev2026.dfs.core.windows.net: "OAuth"[m
+[31m-        spark.hadoop.fs.azure.account.oauth.provider.type.stmscaidev2026.dfs.core.windows.net: "org.apache.hadoop.fs.azurebfs.oauth2.MsiTokenProvider"[m
+[32m+[m[32m        # PORTABILITY: storage account is the ${var.storage_account_name}[m
+[32m+[m[32m        # bundle variable (declared in ../../../databricks.yml), sourced from[m
+[32m+[m[32m        # the Terraform output `storage_account_name`. No account name is[m
+[32m+[m[32m        # hardcoded here, so the same pipeline deploys against any subscription.[m
+[32m+[m[32m        bronze_path: "abfss://${var.storage_container}@${var.storage_account_name}.dfs.core.windows.net/raw/telemetry/"[m
+[32m+[m[32m        # Force the ABFS driver to authenticate via the Unity Catalog External[m
+[32m+[m[32m        # Location / Access Connector managed identity (OAuth), not account keys.[m
+[32m+[m[32m        spark.hadoop.fs.azure.account.auth.type.${var.storage_account_name}.dfs.core.windows.net: "OAuth"[m
+[32m+[m[32m        spark.hadoop.fs.azure.account.oauth.provider.type.${var.storage_account_name}.dfs.core.windows.net: "org.apache.hadoop.fs.azurebfs.oauth2.MsiTokenProvider"[m
+[1mdiff --git a/ml/cloud_forest/score_escalations.py b/ml/cloud_forest/score_escalations.py[m
+[1mindex e283078..3691ec8 100644[m
+[1m--- a/ml/cloud_forest/score_escalations.py[m
+[1m+++ b/ml/cloud_forest/score_escalations.py[m
+[36m@@ -45,15 +45,23 @@[m [mfrom pyspark.sql import functions as F[m
+ dbutils.widgets.text("registered_model_name", "cloud_forest_bearing")[m
+ dbutils.widgets.text("model_stage_or_version", "latest")[m
+ dbutils.widgets.text("anomaly_threshold", "0.60")[m
+[31m-dbutils.widgets.text([m
+[31m-    "bronze_path",[m
+[31m-    "abfss://datalake@stindustrialaidev2026.dfs.core.windows.net/raw/telemetry/",[m
+[31m-)[m
+[32m+[m[32m# PORTABILITY: no hardcoded storage account. The deployed Job supplies[m
+[32m+[m[32m# bronze_path from bundle variables (see databricks/resources/jobs/[m
+[32m+[m[32m# cloud_forest.yml, sourced from the Terraform output storage_account_name).[m
+[32m+[m[32m# Empty default => fail fast if run manually without supplying it, rather than[m
+[32m+[m[32m# silently targeting a decommissioned account.[m
+[32m+[m[32mdbutils.widgets.text("bronze_path", "")[m
+ [m
+ REGISTERED_MODEL_NAME = dbutils.widgets.get("registered_model_name")[m
+ MODEL_STAGE_OR_VERSION = dbutils.widgets.get("model_stage_or_version")[m
+ ANOMALY_THRESHOLD = float(dbutils.widgets.get("anomaly_threshold"))[m
+ BRONZE_PATH = dbutils.widgets.get("bronze_path")[m
+[32m+[m[32mif not BRONZE_PATH:[m
+[32m+[m[32m    raise ValueError([m
+[32m+[m[32m        "bronze_path is empty -- supply it via the Job base_parameters "[m
+[32m+[m[32m        "(databricks/resources/jobs/cloud_forest.yml sources it from the "[m
+[32m+[m[32m        "Terraform output storage_account_name)."[m
+[32m+[m[32m    )[m
+ [m
+ FEATURE_COLUMNS = ["rms", "peak", "crest", "kurtosis", "skew", "variance", "mean_abs"][m
+ [m
+[1mdiff --git a/terraform/modules/databricks/unity_catalog.tf b/terraform/modules/databricks/unity_catalog.tf[m
+[1mindex a72c4bb..845a779 100644[m
+[1m--- a/terraform/modules/databricks/unity_catalog.tf[m
+[1m+++ b/terraform/modules/databricks/unity_catalog.tf[m
+[36m@@ -41,9 +41,16 @@[m [mresource "databricks_catalog" "industrial_ai" {[m
+   depends_on = [databricks_external_location.industrial_ai_lake][m
+ }[m
+ [m
+[31m-# Unity Catalog Schemas for Medallion Layers & Serving[m
+[32m+[m[32m# Unity Catalog Schemas for Medallion Layers, Serving & ML registry.[m
+[32m+[m[32m#[m
+[32m+[m[32m# "ml" holds registered models (Isolation Forest baseline, CloudForest). It is[m
+[32m+[m[32m# REQUIRED by ml/train_bearing_isolation_forest.py, which registers models[m
+[32m+[m[32m# under the three-part UC name industrial_ai.ml.<model>. Without it, a fresh[m
+[32m+[m[32m# deployment fails model registration with SCHEMA_DOES_NOT_EXIST (this was[m
+[32m+[m[32m# previously worked around by a manual `CREATE SCHEMA` -- now provisioned as[m
+[32m+[m[32m# code so the platform is reproducible end to end).[m
+ resource "databricks_schema" "schemas" {[m
+[31m-  for_each     = toset(["bronze", "silver", "gold", "serving"])[m
+[32m+[m[32m  for_each     = toset(["bronze", "silver", "gold", "serving", "ml"])[m
+   catalog_name = databricks_catalog.industrial_ai.name[m
+   name         = each.value[m
+   comment      = "Schema for ${each.value} layer"[m
