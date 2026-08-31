@@ -5,9 +5,9 @@
 # so this file stays valid across subscriptions. catalog_name is the fixed
 # Unity Catalog name Terraform creates ("industrial_ai"), not the workspace id.
 environment: "dev"
-workspace_id: "<from terraform output databricks_workspace_id>"
-databricks_host: "<from terraform output databricks_workspace_url>"
+workspace_id: "7405605327228746"
+databricks_host: "https://adb-7405605327228746.6.azuredatabricks.net"
 catalog_name: "industrial_ai"
-storage_account_name: "<from terraform output storage_account_name>"
-eventhub_namespace: "evhns-industrial-ai-dev"
-eventhub_name: "evh-industrial-ai-dev"
+storage_account_name: "stindai2026b"
+eventhub_namespace: "ehns-industrial-ai-dev"
+eventhub_name: "telemetryhub"
