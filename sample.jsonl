@@ -1,1 +1,0 @@
-﻿{"event_id":"test-001","device_id":"dev-01","asset_type":"bearing_sensor","timestamp":"2026-08-30T04:00:00Z","priority":"normal","schema_version":"1.0.0","payload":{"rms":0.12,"peak":0.45,"crest":3.75,"kurtosis":2.1,"skew":0.05,"variance":0.014,"mean_abs":0.09}}
