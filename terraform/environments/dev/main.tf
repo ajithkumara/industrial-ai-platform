@@ -1,3 +1,5 @@
+data "azurerm_subscription" "current" {}
+
 locals {
   name_suffix              = "${var.project_name}-${var.environment}"
   name_suffix_alphanumeric = replace(local.name_suffix, "-", "")
@@ -67,10 +69,12 @@ module "rbac" {
 }
 
 module "monitoring" {
-  source              = "../../modules/monitoring"
-  resource_group_name = module.resource_group.name
-  location            = module.resource_group.location
-  tags                = var.tags
-  name_suffix         = local.name_suffix
+  source                = "../../modules/monitoring"
+  resource_group_name   = module.resource_group.name
+  location              = module.resource_group.location
+  tags                  = var.tags
+  name_suffix           = local.name_suffix
+  eventhub_namespace_id = module.eventhub.namespace_id
+  subscription_id       = data.azurerm_subscription.current.id
 }
 
