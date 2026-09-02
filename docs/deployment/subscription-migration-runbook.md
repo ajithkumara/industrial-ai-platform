@@ -16,7 +16,21 @@ around them.
 | Resource group, storage, Event Hub, Key Vault, monitoring, Databricks workspace, RBAC | Yes (Terraform) | Re-running `terraform apply` against a new subscription recreates all of this. |
 | Terraform remote state backend | Semi-automated | `terraform/bootstrap` module creates it in one command, but must be run manually once per subscription (chicken-and-egg: state backend can't store its own state). |
 | Storage account global name | Manual input | Storage account names are globally unique across all of Azure. A GitHub Actions **repository variable** controls this — no code change needed, but the value may need to change. |
+| Databricks workspace host (for bundle validate) | Manual input | A GitHub Actions repository **variable**, not a secret — the host URL isn't sensitive. |
 | Unity Catalog grants for the CI service principal | Manual (SQL) | Requires metastore-admin privileges that neither the CI SP nor a personal Microsoft account holds. Must be run once per (metastore, catalog, SP) combination via the Databricks SQL Editor. |
+
+> ⚠️ **Data-loss warning, learned the hard way (2026-09-02):** if
+> `STORAGE_ACCOUNT_NAME_OVERRIDE` is missing or empty when `terraform apply`
+> runs, Terraform silently falls back to a computed default name that
+> differs from the existing storage account. Because the name is an
+> immutable property, Terraform then plans to **destroy and recreate the
+> entire storage account** — which destroys the `datalake` and `checkpoint`
+> ADLS filesystems (and anything in them) before recreating empty ones. This
+> happened once during initial hardening; it was caught only because a
+> separate RBAC permission error happened to abort the apply before the
+> storage account itself was destroyed. **Always verify the variable is set
+> and correct BEFORE the first apply against a new subscription** — do not
+> rely on the apply failing safely.
 
 ---
 
@@ -79,19 +93,23 @@ git push
 `ci.yml` runs `terraform init -backend-config=backend.hcl` — once this file is
 committed, CI automatically uses the correct backend with no workflow edits.
 
-## Step 4 — Set the storage account name variable
+## Step 4 — Set required repository variables
 
-Storage account names must be globally unique across every Azure subscription
-worldwide, so the old name may already exist (yours or someone else's) in the
-new subscription's region. Repo → Settings → Secrets and variables → Actions
-→ Variables tab → **New repository variable**:
+Repo → Settings → Secrets and variables → Actions → **Variables** tab (not
+Secrets) → **New repository variable**, for each of:
 
 | Variable | Value |
 |---|---|
-| `STORAGE_ACCOUNT_NAME_OVERRIDE` | a new globally-unique name, e.g. `stindai2026c` (lowercase alphanumeric, ≤24 chars) |
+| `STORAGE_ACCOUNT_NAME_OVERRIDE` | a globally-unique name, e.g. `stindai2026c` (lowercase alphanumeric, ≤24 chars). **Set this before the first apply — see the data-loss warning above.** |
+| `DATABRICKS_HOST` | the workspace URL, e.g. `https://adb-<workspace-id>.<n>.azuredatabricks.net` — used by `databricks_deploy.yml`'s bundle-validate job. Not sensitive; a variable, not a secret. |
 
-`ci.yml` reads this via `${{ vars.STORAGE_ACCOUNT_NAME_OVERRIDE }}` — no
-workflow file edit needed to change subscriptions or rename the account later.
+`ci.yml` reads the storage override via `${{ vars.STORAGE_ACCOUNT_NAME_OVERRIDE }}`
+and `databricks_deploy.yml` reads the host via `${{ vars.DATABRICKS_HOST }}` —
+no workflow file edits needed to change subscriptions or rename either value
+later. **Double-check both variables are actually saved** (open the Variables
+tab and confirm they're listed with the right value) before triggering a
+deploy — a typo'd variable name silently resolves to an empty string with no
+error, which is what caused the incident above.
 
 ## Step 5 — Run Terraform apply (via CI or locally)
 
@@ -135,6 +153,29 @@ The `terraform-apply` job should now complete Terraform apply, export
 outputs, and successfully run `databricks bundle deploy -t dev`.
 
 ---
+
+## Known limitation: SP cannot manage its own role assignments
+
+The CI SP is granted `Contributor` (Step 1), which does **not** include
+`Microsoft.Authorization/roleAssignments/delete`. If Terraform ever needs to
+replace the `azurerm_role_assignment.role_assignment` resource in
+`terraform/modules/rbac` (e.g. because its scope changes), the apply will
+fail with a 403 `AuthorizationFailed` trying to delete the old assignment
+first. This has not yet been fixed with a Terraform-managed grant of
+`User Access Administrator` scoped narrowly to the storage account — if you
+hit this error, either grant that role manually and re-run, or ask for the
+scoped Terraform fix to be added permanently.
+
+## Known limitation: required check must run unconditionally
+
+`databricks_deploy.yml` ("Databricks CI" / "Validate Databricks Bundle") is a
+**required** branch-protection status check. It intentionally has **no**
+`paths:` filter. GitHub reports a required check that never triggers (e.g.
+because a path filter excluded the PR's changed files) as permanently
+"pending — waiting for status," which blocks merging forever with no error
+message. If you ever add a path filter back to make CI faster, remove it (or
+the check) from required status checks in the branch ruleset at the same
+time, or the same deadlock will recur on any infra-only or docs-only PR.
 
 ## Known limitation: different Azure AD tenant
 
