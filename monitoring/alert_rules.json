@@ -1,3 +1,59 @@
 {
-  "rules": []
+  "_comment": "Azure Monitor alert rules for the Industrial AI Platform (dev). Implemented as azurerm_monitor_metric_alert and azurerm_monitor_scheduled_query_rules_alert resources in terraform/modules/monitoring/main.tf. Action group: ag-industrial-ai-dev → aakumara@gmail.com.",
+  "action_group": {
+    "name": "ag-industrial-ai-dev",
+    "short_name": "indai-dev",
+    "email_receiver": {
+      "name": "Ajith Kumara",
+      "address": "aakumara@gmail.com"
+    }
+  },
+  "rules": [
+    {
+      "id": "ALERT-01",
+      "name": "DLT Pipeline Failure",
+      "description": "Fires when the industrial_ai_dlt_pipeline records a failed update. Indicates Bronze→Gold processing has stopped — investigate Databricks pipeline logs immediately.",
+      "severity": 1,
+      "type": "log_query",
+      "resource": "log_analytics_workspace",
+      "query": "AzureDiagnostics | where ResourceProvider == 'MICROSOFT.DATABRICKS' | where ResultType == 'Failed' | where ResourceId contains 'dbw-industrial-ai-dev'",
+      "frequency_minutes": 5,
+      "window_minutes": 15,
+      "threshold": {
+        "operator": "GreaterThan",
+        "value": 0
+      },
+      "action_group": "ag-industrial-ai-dev"
+    },
+    {
+      "id": "ALERT-02",
+      "name": "Event Hub Incoming Message Lag",
+      "description": "Fires when Event Hub IncomingMessages drops to zero for 15 minutes during business hours, indicating the telemetry producer has stopped or the consumer is not draining the queue.",
+      "severity": 2,
+      "type": "metric",
+      "resource": "eventhub_namespace",
+      "metric_name": "IncomingMessages",
+      "aggregation": "Total",
+      "frequency_minutes": 5,
+      "window_minutes": 15,
+      "threshold": {
+        "operator": "LessThan",
+        "value": 1
+      },
+      "action_group": "ag-industrial-ai-dev"
+    },
+    {
+      "id": "ALERT-03",
+      "name": "Subscription Cost Threshold",
+      "description": "Fires when the dev subscription's accumulated cost exceeds $50 USD. Given the 29-day trial credit, this acts as an early warning to destroy idle resources before the credit is exhausted.",
+      "severity": 2,
+      "type": "cost_budget",
+      "resource": "subscription",
+      "budget_name": "budget-industrial-ai-dev",
+      "amount_usd": 50,
+      "threshold_percent": 80,
+      "action_group": "ag-industrial-ai-dev",
+      "note": "Implemented as azurerm_consumption_budget_subscription in terraform/modules/monitoring/main.tf"
+    }
+  ]
 }

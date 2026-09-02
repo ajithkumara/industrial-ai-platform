@@ -29,6 +29,9 @@ jobs:
     name: Terraform Plan
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
+    permissions:
+      contents: read
+      pull-requests: write
     defaults:
       run:
         working-directory: ${{ env.TF_WORKING_DIR }}
@@ -42,13 +45,32 @@ jobs:
           terraform_version: "~1.7"
 
       - name: Terraform Init
-        run: terraform init
+        run: |
+          terraform init \
+            -backend-config="resource_group_name=rg-terraform" \
+            -backend-config="storage_account_name=sttfstate4922m7vk" \
+            -backend-config="container_name=terraformstate" \
+            -backend-config="key=dev.terraform.tfstate"
 
       - name: Terraform Validate
         run: terraform validate
 
       - name: Terraform Plan
-        run: terraform plan -var-file terraform.tfvars -out=tfplan -no-color
+        run: |
+          terraform plan \
+            -var="storage_account_name_override=stindai2026b" \
+            -target=module.resource_group \
+            -target=module.storage \
+            -target=module.eventhub \
+            -target=module.access_connector \
+            -target=module.rbac \
+            -target=module.keyvault \
+            -target=module.monitoring \
+            -out=tfplan -no-color
+        # module.databricks excluded: Unity Catalog resources (storage credential,
+        # external location, catalog, schemas) require metastore admin which the
+        # CI SP does not have. The Databricks workspace is stable; bundle deploy
+        # handles all Databricks-side changes.
         continue-on-error: false
 
       - name: Post plan summary to PR
@@ -85,10 +107,25 @@ jobs:
           terraform_wrapper: false
 
       - name: Terraform Init
-        run: terraform init
+        run: |
+          terraform init \
+            -backend-config="resource_group_name=rg-terraform" \
+            -backend-config="storage_account_name=sttfstate4922m7vk" \
+            -backend-config="container_name=terraformstate" \
+            -backend-config="key=dev.terraform.tfstate"
 
       - name: Terraform Apply
-        run: terraform apply -var-file terraform.tfvars -auto-approve
+        run: |
+          terraform apply \
+            -var="storage_account_name_override=stindai2026b" \
+            -target=module.resource_group \
+            -target=module.storage \
+            -target=module.eventhub \
+            -target=module.access_connector \
+            -target=module.rbac \
+            -target=module.keyvault \
+            -target=module.monitoring \
+            -auto-approve
 
       - name: Export Terraform outputs
         id: tf_outputs

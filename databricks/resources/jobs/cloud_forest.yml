@@ -19,18 +19,16 @@ resources:
   jobs:
     cloud_forest_train:
       name: "CloudForest — Train Cloud Validation Model"
+      environments:
+        - environment_key: serverless
+          spec:
+            client: "1"
       tasks:
         - task_key: train_cloud_forest
           notebook_task:
             notebook_path: ../../../ml/cloud_forest/train_cloud_forest.py
             source: WORKSPACE
-          job_cluster_key: cloud_forest_cluster
-      job_clusters:
-        - job_cluster_key: cloud_forest_cluster
-          new_cluster:
-            spark_version: "15.4.x-scala2.12"
-            node_type_id: "Standard_DS3_v2"
-            num_workers: 1
+          environment_key: serverless
       # Manual/on-demand by default -- retraining is a deliberate action
       # during thesis evaluation, not a background schedule. Uncomment to
       # automate once a real retraining cadence is decided (Roadmap V2+).
@@ -40,6 +38,10 @@ resources:
 
     cloud_forest_score_escalations:
       name: "CloudForest — Score HYBRID Escalations"
+      environments:
+        - environment_key: serverless
+          spec:
+            client: "1"
       tasks:
         - task_key: score_escalations
           notebook_task:
@@ -52,13 +54,7 @@ resources:
               # hardcoded default -- so scoring targets the right account in any
               # subscription. See databricks/resources/pipelines/dlt.yml.
               bronze_path: "abfss://${var.storage_container}@${var.storage_account_name}.dfs.core.windows.net/raw/telemetry/"
-          job_cluster_key: cloud_forest_cluster
-      job_clusters:
-        - job_cluster_key: cloud_forest_cluster
-          new_cluster:
-            spark_version: "15.4.x-scala2.12"
-            node_type_id: "Standard_DS3_v2"
-            num_workers: 1
+          environment_key: serverless
       # Runs every 15 minutes -- frequent enough that escalations get an
       # asynchronous second opinion promptly (useful for a live
       # evaluation session) without running on every single event

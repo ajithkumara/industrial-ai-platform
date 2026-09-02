@@ -1,3 +1,8 @@
+output "namespace_id" {
+  value       = azurerm_eventhub_namespace.ehns.id
+  description = "Resource ID of the Event Hub namespace."
+}
+
 output "namespace_name" {
   value       = azurerm_eventhub_namespace.ehns.name
   description = "The Event Hub namespace name."
