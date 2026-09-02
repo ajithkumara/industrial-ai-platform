@@ -45,12 +45,7 @@ jobs:
           terraform_version: "~1.7"
 
       - name: Terraform Init
-        run: |
-          terraform init \
-            -backend-config="resource_group_name=rg-terraform" \
-            -backend-config="storage_account_name=sttfstate4922m7vk" \
-            -backend-config="container_name=terraformstate" \
-            -backend-config="key=dev.terraform.tfstate"
+        run: terraform init -backend-config=backend.hcl
 
       - name: Terraform Validate
         run: terraform validate
@@ -58,7 +53,7 @@ jobs:
       - name: Terraform Plan
         run: |
           terraform plan \
-            -var="storage_account_name_override=stindai2026b" \
+            -var="storage_account_name_override=${{ vars.STORAGE_ACCOUNT_NAME_OVERRIDE }}" \
             -target=module.resource_group \
             -target=module.storage \
             -target=module.eventhub \
@@ -107,17 +102,12 @@ jobs:
           terraform_wrapper: false
 
       - name: Terraform Init
-        run: |
-          terraform init \
-            -backend-config="resource_group_name=rg-terraform" \
-            -backend-config="storage_account_name=sttfstate4922m7vk" \
-            -backend-config="container_name=terraformstate" \
-            -backend-config="key=dev.terraform.tfstate"
+        run: terraform init -backend-config=backend.hcl
 
       - name: Terraform Apply
         run: |
           terraform apply \
-            -var="storage_account_name_override=stindai2026b" \
+            -var="storage_account_name_override=${{ vars.STORAGE_ACCOUNT_NAME_OVERRIDE }}" \
             -target=module.resource_group \
             -target=module.storage \
             -target=module.eventhub \
@@ -140,8 +130,11 @@ jobs:
         working-directory: ${{ github.workspace }}
         env:
           DATABRICKS_HOST: ${{ steps.tf_outputs.outputs.databricks_host }}
-          # Use Azure SP auth (ARM_* already set at workflow level).
-          # Do NOT set DATABRICKS_TOKEN here — mixing PAT + Azure SP auth
-          # causes "more than one authorization method configured" error.
+          DATABRICKS_TOKEN: ""
+          # Explicitly blank out DATABRICKS_TOKEN so the CLI uses Azure SP auth
+          # (ARM_* vars set at workflow level). Mixing PAT + Azure SP causes
+          # "more than one authorization method configured" error.
           BUNDLE_VAR_storage_account_name: ${{ steps.tf_outputs.outputs.storage_account_name }}
-        run: databricks bundle deploy -t dev
+        run: |
+          unset DATABRICKS_TOKEN
+          databricks bundle deploy -t dev
