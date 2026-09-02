@@ -68,6 +68,20 @@ module "rbac" {
   principal_id = module.access_connector.principal_id
 }
 
+module "keyvault" {
+  source                              = "../../modules/keyvault"
+  resource_group_name                 = module.resource_group.name
+  location                            = module.resource_group.location
+  tags                                = var.tags
+  name_suffix                         = local.name_suffix
+  databricks_mi_object_id             = module.access_connector.principal_id
+  eventhub_producer_connection_string = module.eventhub.producer_connection_string
+  eventhub_consumer_connection_string = module.eventhub.consumer_connection_string
+  storage_primary_connection_string   = module.storage.primary_connection_string
+
+  depends_on = [module.resource_group]
+}
+
 module "monitoring" {
   source                = "../../modules/monitoring"
   resource_group_name   = module.resource_group.name
