@@ -140,6 +140,8 @@ jobs:
         working-directory: ${{ github.workspace }}
         env:
           DATABRICKS_HOST: ${{ steps.tf_outputs.outputs.databricks_host }}
-          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+          # Use Azure SP auth (ARM_* already set at workflow level).
+          # Do NOT set DATABRICKS_TOKEN here — mixing PAT + Azure SP auth
+          # causes "more than one authorization method configured" error.
           BUNDLE_VAR_storage_account_name: ${{ steps.tf_outputs.outputs.storage_account_name }}
         run: databricks bundle deploy -t dev
