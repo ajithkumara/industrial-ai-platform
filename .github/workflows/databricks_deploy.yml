@@ -1,24 +1,30 @@
 name: Databricks CI
 
+# NOTE: no `paths:` filter. This is a required status check on the branch
+# ruleset, and GitHub reports required checks whose trigger never fired as
+# permanently "pending" rather than "skipped" -- which blocks merges forever
+# on any PR that doesn't happen to touch databricks/dlt/config files (e.g.
+# Terraform-only or docs-only changes). Running it unconditionally on every
+# push/PR to main is cheap and keeps required-check semantics correct.
 on:
   push:
     branches: [main]
-    paths:
-      - 'databricks/**'
-      - 'dlt/**'
-      - 'config/asset_types/**'
-      - 'shared/**'
   pull_request:
-    paths:
-      - 'databricks/**'
-      - 'dlt/**'
-      - 'config/asset_types/**'
-      - 'shared/**'
+    branches: [main]
 
 jobs:
   validate:
     name: Validate Databricks Bundle
     runs-on: ubuntu-latest
+    env:
+      # Azure SP auth (same as ci.yml) -- avoids depending on a Databricks
+      # PAT secret. DATABRICKS_HOST is not sensitive (it's the workspace
+      # URL), so it's a repo variable rather than a secret.
+      ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      ARM_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+      ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      DATABRICKS_HOST: ${{ vars.DATABRICKS_HOST }}
+      BUNDLE_VAR_storage_account_name: ${{ vars.STORAGE_ACCOUNT_NAME_OVERRIDE }}
     steps:
       - uses: actions/checkout@v4
       - uses: databricks/setup-cli@main
@@ -28,7 +34,3 @@ jobs:
         # root (see databricks.yml) because dlt/ and config/asset_types/
         # live outside databricks/ and DAB cannot reference files outside
         # its bundle root. No working-directory override needed now.
-        env:
-          DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
-          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
-          BUNDLE_VAR_storage_account_name: ${{ vars.STORAGE_ACCOUNT_NAME }}
