@@ -45,7 +45,12 @@ jobs:
           terraform_version: "~1.7"
 
       - name: Terraform Init
-        run: terraform init
+        run: |
+          terraform init \
+            -backend-config="resource_group_name=rg-terraform" \
+            -backend-config="storage_account_name=sttfstate4922m7vk" \
+            -backend-config="container_name=terraformstate" \
+            -backend-config="key=dev.terraform.tfstate"
 
       - name: Terraform Validate
         run: terraform validate
@@ -88,7 +93,12 @@ jobs:
           terraform_wrapper: false
 
       - name: Terraform Init
-        run: terraform init
+        run: |
+          terraform init \
+            -backend-config="resource_group_name=rg-terraform" \
+            -backend-config="storage_account_name=sttfstate4922m7vk" \
+            -backend-config="container_name=terraformstate" \
+            -backend-config="key=dev.terraform.tfstate"
 
       - name: Terraform Apply
         run: terraform apply -var-file terraform.tfvars -auto-approve
