@@ -54,6 +54,7 @@ jobs:
         run: |
           terraform plan \
             -var="storage_account_name_override=${{ vars.STORAGE_ACCOUNT_NAME_OVERRIDE }}" \
+            -var="ci_principal_object_id=${{ vars.CI_SP_OBJECT_ID }}" \
             -target=module.resource_group \
             -target=module.storage \
             -target=module.eventhub \
@@ -108,6 +109,7 @@ jobs:
         run: |
           terraform apply \
             -var="storage_account_name_override=${{ vars.STORAGE_ACCOUNT_NAME_OVERRIDE }}" \
+            -var="ci_principal_object_id=${{ vars.CI_SP_OBJECT_ID }}" \
             -target=module.resource_group \
             -target=module.storage \
             -target=module.eventhub \
