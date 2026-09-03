@@ -154,17 +154,49 @@ outputs, and successfully run `databricks bundle deploy -t dev`.
 
 ---
 
-## Known limitation: SP cannot manage its own role assignments
+## Step 4.5 — Bootstrap the CI SP's User Access Administrator grant
 
-The CI SP is granted `Contributor` (Step 1), which does **not** include
-`Microsoft.Authorization/roleAssignments/delete`. If Terraform ever needs to
-replace the `azurerm_role_assignment.role_assignment` resource in
-`terraform/modules/rbac` (e.g. because its scope changes), the apply will
-fail with a 403 `AuthorizationFailed` trying to delete the old assignment
-first. This has not yet been fixed with a Terraform-managed grant of
-`User Access Administrator` scoped narrowly to the storage account — if you
-hit this error, either grant that role manually and re-run, or ask for the
-scoped Terraform fix to be added permanently.
+The CI SP is granted `Contributor` (Step 1), which explicitly **excludes**
+`Microsoft.Authorization/*/Write` and `.../Delete` — so a Contributor-only SP
+can neither create nor delete role assignments, including the one Terraform
+itself manages in `terraform/modules/rbac`. If that role assignment is ever
+forced to replace (e.g. because of an unrelated storage account rename — see
+the data-loss warning above, which is exactly how this was discovered), the
+apply fails with 403 `AuthorizationFailed` on the delete step, potentially
+after already destroying dependent resources.
+
+The fix (`ci_principal_object_id` variable in `terraform/modules/rbac`)
+grants the CI SP `User Access Administrator` scoped **only** to the storage
+account, so it can manage that one role assignment going forward. But this
+grant has the same chicken-and-egg problem it solves: a Contributor-only SP
+can't create it either. **Run this once, locally, using your own `az login`
+(which has Owner rights on the subscription) — never via CI:**
+
+```bash
+az login
+az account set --subscription <NEW_SUBSCRIPTION_ID>
+
+# Get the CI SP's Object ID (NOT the same as its Application/Client ID)
+az ad sp show --id <AZURE_CLIENT_ID> --query id -o tsv
+
+cd terraform/environments/dev
+$env:DATABRICKS_TOKEN = ""   # unset if present, see Step 5 note
+terraform init -backend-config=backend.hcl
+terraform apply -target=module.rbac `
+  -var="storage_account_name_override=<value from Step 4>" `
+  -var="ci_principal_object_id=<Object ID from above>"
+```
+
+Then add `ci_principal_object_id` as a GitHub Actions **repository
+variable** named `CI_SP_OBJECT_ID` so future CI runs pass the same value
+(harmless no-op once the grant exists in state — CI just refreshes it):
+
+| Variable | Value |
+|---|---|
+| `CI_SP_OBJECT_ID` | the Object ID from `az ad sp show` above |
+
+After this one-time bootstrap, the CI SP can manage that role assignment
+itself and this failure mode cannot recur for this specific resource.
 
 ## Known limitation: required check must run unconditionally
 

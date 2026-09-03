@@ -38,3 +38,9 @@ variable "databricks_principal" {
   default     = ""
 }
 
+variable "ci_principal_object_id" {
+  type        = string
+  description = "Object ID of the CI service principal. Grants it User Access Administrator scoped to the storage account only, so Terraform can manage role assignments there without hitting 403 under plain Contributor. See terraform/modules/rbac/variables.tf."
+  default     = ""
+}
+

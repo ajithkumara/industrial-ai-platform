@@ -63,9 +63,10 @@ module "access_connector" {
 }
 
 module "rbac" {
-  source       = "../../modules/rbac"
-  scope        = module.storage.id
-  principal_id = module.access_connector.principal_id
+  source                  = "../../modules/rbac"
+  scope                   = module.storage.id
+  principal_id            = module.access_connector.principal_id
+  ci_principal_object_id  = var.ci_principal_object_id
 }
 
 module "keyvault" {
