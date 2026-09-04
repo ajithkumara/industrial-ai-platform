@@ -35,6 +35,10 @@ resources:
   jobs:
     bearing_isolation_forest_train:
       name: "Edge Bearing Isolation Forest — Train + Freeze Threshold"
+      # P0-04: Alert on failure so a broken training run is not silently ignored.
+      email_notifications:
+        on_failure:
+          - aakumara@gmail.com
       tasks:
         - task_key: train_bearing_isolation_forest
           notebook_task:
@@ -62,6 +66,10 @@ resources:
 
     bearing_isolation_forest_evaluate:
       name: "Edge Bearing Isolation Forest — TEST Evaluation (frozen threshold)"
+      # P0-04: Alert on failure.
+      email_notifications:
+        on_failure:
+          - aakumara@gmail.com
       tasks:
         - task_key: evaluate_bearing_model
           notebook_task:

@@ -60,3 +60,77 @@ def cleaned_telemetry_events():
     deduped_df = df.withColumn("rn", row_number().over(window_spec)).filter(col("rn") == 1).drop("rn")
 
     return deduped_df
+
+
+# ---------------------------------------------------
+# SILVER QUARANTINE TABLE: quarantine_telemetry_events
+#
+# P1-11: Captures every Bronze event that FAILS at least one of the
+# Silver DQ expectations above, so that rejected events are traceable
+# rather than silently dropped.
+#
+# This mirrors the complement of the @dlt.expect_or_drop predicates on
+# cleaned_telemetry_events. Any event that would be dropped from the
+# main Silver table lands here for investigation and potential replay.
+#
+# Downstream consumers MUST NOT read from this table for production
+# aggregations — it exists for data quality auditing only.
+# ---------------------------------------------------
+@dlt.table(
+    name="industrial_ai.silver.quarantine_telemetry_events",
+    comment="P1-11: Bronze events that failed Silver DQ expectations. For audit and replay only.",
+    table_properties={
+        "quality": "quarantine",
+        "pipelines.reset.allowed": "true",
+    },
+)
+def quarantine_telemetry_events():
+    """
+    Reads raw Bronze events and keeps only those that FAIL at least one
+    Silver expectation — i.e. the exact set that cleaned_telemetry_events drops.
+
+    Adds a `_quarantine_reason` column listing which expectations failed,
+    so operators can triage at a glance.
+    """
+    from pyspark.sql.functions import array, array_remove, lit, when
+
+    df = dlt.read("telemetry_bronze")
+
+    # Replicate each @dlt.expect_or_drop predicate as an inverse flag.
+    # A row is quarantined if ANY flag is True.
+    df = df.withColumn(
+        "_fail_event_id",
+        ~(col("event_id").isNotNull() & (col("event_id") != ""))
+    ).withColumn(
+        "_fail_device_id",
+        ~(col("device_id").isNotNull() & (col("device_id") != ""))
+    ).withColumn(
+        "_fail_asset_type",
+        ~(col("asset_type").isNotNull() & (col("asset_type") != ""))
+    ).withColumn(
+        "_fail_timestamp",
+        col("timestamp").isNull()
+    )
+
+    quarantined = df.filter(
+        col("_fail_event_id") |
+        col("_fail_device_id") |
+        col("_fail_asset_type") |
+        col("_fail_timestamp")
+    )
+
+    # Build a human-readable reason string.
+    quarantined = quarantined.withColumn(
+        "_quarantine_reason",
+        array_remove(
+            array(
+                when(col("_fail_event_id"),   lit("invalid_event_id")).otherwise(lit(None)),
+                when(col("_fail_device_id"),  lit("invalid_device_id")).otherwise(lit(None)),
+                when(col("_fail_asset_type"), lit("invalid_asset_type")).otherwise(lit(None)),
+                when(col("_fail_timestamp"),  lit("null_timestamp")).otherwise(lit(None)),
+            ),
+            None
+        )
+    )
+
+    return quarantined.drop("_fail_event_id", "_fail_device_id", "_fail_asset_type", "_fail_timestamp")

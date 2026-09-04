@@ -1,19 +1,24 @@
 """
 Unit tests for consumer/eventhub_consumer.py's on_event() handler.
 
-Proves the Phase 2 checkpoint/data-loss invariant end-to-end at the
-consumer level (not just inside BatchBuffer, see tests/test_batch_buffer.py):
+P0-01 contract (checkpoint ordering fix)
+-----------------------------------------
+After the fix, the checkpoint responsibility has moved from on_event() into
+BatchBuffer.flush().  on_event() must:
 
-  - A successfully buffered/persisted event advances the checkpoint.
-  - An event that fails to persist (ADLS write error surfaced through
-    batch_buffer.add()) must NOT advance the checkpoint, so it is retried
-    (via Event Hub redelivery) instead of being silently lost.
+  - Call batch_buffer.add(event_data, partition_id, offset, sequence_number)
+    for every valid event (so BatchBuffer has the metadata it needs to
+    checkpoint after the write).
+  - NOT call checkpoint_manager.update_checkpoint() itself for buffered
+    events — that is now BatchBuffer's job.
+  - Still call checkpoint_manager.update_checkpoint() immediately for
+    DLQ events (write_to_dlq is synchronous, so checkpointing right away
+    is correct for that path).
+  - NOT call checkpoint_manager.update_checkpoint() when batch_buffer.add()
+    raises (write failed — checkpoint must not advance).
 
-These tests import consumer.eventhub_consumer directly. That import used to
-construct live Azure clients (StorageClient) at module scope and would
-crash without real credentials; this is now deferred to main(), so the
-module-level singletons (checkpoint_manager/storage_client/batch_buffer)
-start out as None and are monkeypatched here with fakes.
+The per-flush checkpoint behaviour (last offset per partition, called only
+after upload_batch succeeds) is covered exhaustively in test_batch_buffer.py.
 """
 
 from __future__ import annotations
@@ -41,14 +46,29 @@ class FakeCheckpointManager:
 
 
 class FakeBatchBuffer:
+    """
+    Test double for consumer.batch_buffer.BatchBuffer.
+
+    Updated for P0-01: add() now accepts partition_id, offset, sequence_number
+    keyword arguments alongside the event dict.  The fake records each call
+    so tests can assert the correct arguments were passed.
+    """
+
     def __init__(self, fail: bool = False):
         self.fail = fail
-        self.added: list[dict] = []
+        # Each entry: (event_dict, partition_id, offset, sequence_number)
+        self.added: list[tuple] = []
 
-    def add(self, event: dict) -> None:
+    def add(
+        self,
+        event: dict,
+        partition_id: str,
+        offset: str,
+        sequence_number: int,
+    ) -> None:
         if self.fail:
             raise RuntimeError("Simulated ADLS write failure")
-        self.added.append(event)
+        self.added.append((event, partition_id, offset, sequence_number))
 
 
 class FakeStorageClient:
@@ -103,31 +123,51 @@ def _restore_module_singletons():
     ) = original
 
 
-def test_successful_write_advances_checkpoint(monkeypatch):
+def test_valid_event_passed_to_buffer_with_partition_metadata(monkeypatch):
+    """
+    P0-01: on_event must pass partition_id, offset, and sequence_number to
+    batch_buffer.add() so BatchBuffer can checkpoint the correct offset after
+    the batch is durably written.
+
+    on_event itself must NOT call checkpoint_manager.update_checkpoint() for
+    a buffered event — that is exclusively BatchBuffer.flush()'s job.
+    """
     fake_checkpoint = FakeCheckpointManager()
     fake_buffer = FakeBatchBuffer(fail=False)
     monkeypatch.setattr(consumer_module, "checkpoint_manager", fake_checkpoint)
     monkeypatch.setattr(consumer_module, "batch_buffer", fake_buffer)
     monkeypatch.setattr(consumer_module, "storage_client", FakeStorageClient())
 
-    event = FakeEvent(_valid_telemetry_body())
-    consumer_module.on_event(FakePartitionContext(), event)
+    event = FakeEvent(_valid_telemetry_body(), offset="100", sequence_number=42)
+    consumer_module.on_event(FakePartitionContext(partition_id="0"), event)
 
+    # add() was called once with the correct metadata.
     assert len(fake_buffer.added) == 1
-    assert len(fake_checkpoint.updates) == 1
-    assert fake_checkpoint.updates[0]["offset"] == "100"
+    _, partition_id, offset, sequence_number = fake_buffer.added[0]
+    assert partition_id == "0"
+    assert offset == "100"
+    assert sequence_number == 42
+
+    # on_event must NOT checkpoint — that is BatchBuffer's responsibility.
+    assert len(fake_checkpoint.updates) == 0, (
+        "on_event() advanced the checkpoint for a buffered event. "
+        "This is the P0-01 bug — checkpoint must only fire inside "
+        "BatchBuffer.flush() after the write is confirmed."
+    )
 
 
 def test_failed_write_does_not_advance_checkpoint(monkeypatch):
+    """
+    If batch_buffer.add() raises (ADLS write failure), on_event must swallow
+    the error (log it) and must NOT advance the checkpoint.
+    """
     fake_checkpoint = FakeCheckpointManager()
-    fake_buffer = FakeBatchBuffer(fail=True)  # simulates ADLS write failure
+    fake_buffer = FakeBatchBuffer(fail=True)
     monkeypatch.setattr(consumer_module, "checkpoint_manager", fake_checkpoint)
     monkeypatch.setattr(consumer_module, "batch_buffer", fake_buffer)
     monkeypatch.setattr(consumer_module, "storage_client", FakeStorageClient())
 
     event = FakeEvent(_valid_telemetry_body())
-    # on_event must swallow the buffering failure (log it) rather than
-    # propagate it, but must NOT advance the checkpoint.
     consumer_module.on_event(FakePartitionContext(), event)
 
     assert len(fake_checkpoint.updates) == 0
@@ -137,8 +177,9 @@ def test_invalid_schema_routes_to_dlq_and_still_advances_checkpoint(monkeypatch)
     """
     Structurally invalid events are a different failure mode from a failed
     ADLS write: they can never be successfully processed, so they are
-    routed to the DLQ and the checkpoint IS advanced (there is nothing to
-    retry — retrying would just fail validation again).
+    routed to the DLQ and the checkpoint IS advanced immediately (write_to_dlq
+    is synchronous — the DLQ file is durable before on_event returns, so
+    checkpointing right away is correct).
     """
     fake_checkpoint = FakeCheckpointManager()
     fake_buffer = FakeBatchBuffer(fail=False)
@@ -152,5 +193,6 @@ def test_invalid_schema_routes_to_dlq_and_still_advances_checkpoint(monkeypatch)
     consumer_module.on_event(FakePartitionContext(), event)
 
     assert len(fake_storage.dlq_writes) == 1
+    # DLQ path: checkpoint IS advanced immediately (write is synchronous).
     assert len(fake_checkpoint.updates) == 1
     assert len(fake_buffer.added) == 0
