@@ -84,12 +84,16 @@ module "keyvault" {
 }
 
 module "monitoring" {
-  source                = "../../modules/monitoring"
-  resource_group_name   = module.resource_group.name
-  location              = module.resource_group.location
-  tags                  = var.tags
-  name_suffix           = local.name_suffix
-  eventhub_namespace_id = module.eventhub.namespace_id
-  subscription_id       = data.azurerm_subscription.current.id
+  source                           = "../../modules/monitoring"
+  resource_group_name              = module.resource_group.name
+  location                         = module.resource_group.location
+  tags                             = var.tags
+  name_suffix                      = local.name_suffix
+  eventhub_namespace_id            = module.eventhub.namespace_id
+  subscription_id                  = data.azurerm_subscription.current.id
+  # P0-03: Diagnostic settings — route service logs to Log Analytics
+  storage_account_id               = module.storage.id
+  key_vault_id                     = module.keyvault.key_vault_id
+  databricks_workspace_resource_id = module.databricks.workspace_resource_id
 }
 

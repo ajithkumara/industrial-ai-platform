@@ -20,10 +20,26 @@ variable "name_suffix" {
 
 variable "eventhub_namespace_id" {
   type        = string
-  description = "Resource ID of the Event Hub namespace (used for the lag metric alert)."
+  description = "Resource ID of the Event Hub namespace (used for the lag metric alert and diagnostic settings)."
 }
 
 variable "subscription_id" {
   type        = string
   description = "Azure subscription ID (used for the cost budget alert)."
+}
+
+# P0-03: Diagnostic settings targets
+variable "storage_account_id" {
+  type        = string
+  description = "Resource ID of the data storage account (ADLS Gen2) — for diagnostic settings."
+}
+
+variable "key_vault_id" {
+  type        = string
+  description = "Resource ID of the Key Vault — for diagnostic settings."
+}
+
+variable "databricks_workspace_resource_id" {
+  type        = string
+  description = "Resource ID of the Databricks workspace — for diagnostic settings."
 }

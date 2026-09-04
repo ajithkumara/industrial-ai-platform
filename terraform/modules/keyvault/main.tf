@@ -9,6 +9,14 @@ resource "azurerm_key_vault" "kv" {
   soft_delete_retention_days  = 7
   purge_protection_enabled    = false  # false for dev; set true for prod
 
+  # P0-02: Prevent accidental Key Vault destruction.
+  # Losing the Key Vault deletes all stored connection strings (Event Hub,
+  # storage). Even with soft-delete, recreation requires manual secret
+  # re-entry and a new access-policy bootstrap run.
+  lifecycle {
+    prevent_destroy = true
+  }
+
   # Allow the deploying identity (SP or user) to manage secrets
   access_policy {
     tenant_id = data.azurerm_client_config.current.tenant_id

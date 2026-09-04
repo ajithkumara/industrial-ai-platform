@@ -27,6 +27,16 @@ resources:
       continuous: false
       photon: true
 
+      # P0-04: Alert on pipeline failure. Without this, a DLT pipeline failure
+      # (e.g. DQ expectation abort, Spark OOM, schema mismatch) is invisible
+      # until someone manually checks the pipeline UI.
+      notifications:
+        - email_recipients:
+            - aakumara@gmail.com
+          alerts:
+            - on-update-failure
+            - on-flow-failure
+
       libraries:
         - notebook:
             path: ../../../dlt/bronze/ingest_raw_events.py

@@ -1,0 +1,84 @@
+resources:
+  dashboards:
+    industrial_ai_ops:
+      name: "Industrial AI Platform — Operational Dashboard"
+      # P1-12: Minimal operational dashboard.
+      # Covers the four key operational signals that an on-call engineer
+      # needs at a glance: ingestion throughput, Silver DQ pass rate,
+      # quarantine volume, and ML job health.
+      #
+      # Each widget runs a SQL query against Unity Catalog tables.
+      # The dashboard auto-refreshes every 5 minutes in Databricks.
+
+      warehouse_id: "${var.sql_warehouse_id}"
+
+      serialized_dashboard: |
+        {
+          "pages": [
+            {
+              "name": "Operations",
+              "displayName": "Operations",
+              "layout": [],
+              "widgets": [
+                {
+                  "name": "bronze_event_rate",
+                  "title": "Bronze Events — Last 24h",
+                  "description": "Count of telemetry events landed in Bronze per hour",
+                  "query": {
+                    "dataSourceId": "unity_catalog",
+                    "queryString": "SELECT date_trunc('hour', _ingested_at) AS hour, COUNT(*) AS events FROM industrial_ai.bronze.telemetry_bronze WHERE _ingested_at >= now() - INTERVAL 1 DAY GROUP BY 1 ORDER BY 1",
+                    "fields": ["hour", "events"]
+                  },
+                  "visualization": {
+                    "type": "LINE",
+                    "x": "hour",
+                    "y": "events"
+                  }
+                },
+                {
+                  "name": "silver_dq_pass_rate",
+                  "title": "Silver DQ Pass Rate — Last 24h",
+                  "description": "Fraction of Bronze events promoted to Silver vs quarantined",
+                  "query": {
+                    "dataSourceId": "unity_catalog",
+                    "queryString": "WITH silver AS (SELECT COUNT(*) AS passed FROM industrial_ai.silver.cleaned_telemetry_events WHERE timestamp >= now() - INTERVAL 1 DAY), quarantine AS (SELECT COUNT(*) AS rejected FROM industrial_ai.silver.quarantine_telemetry_events WHERE _ingested_at >= now() - INTERVAL 1 DAY) SELECT passed, rejected, round(100.0 * passed / NULLIF(passed + rejected, 0), 2) AS pass_pct FROM silver, quarantine",
+                    "fields": ["passed", "rejected", "pass_pct"]
+                  },
+                  "visualization": {
+                    "type": "COUNTER",
+                    "field": "pass_pct",
+                    "suffix": "%"
+                  }
+                },
+                {
+                  "name": "quarantine_volume",
+                  "title": "Quarantine Events — Last 7 Days",
+                  "description": "Quarantine events by failure reason (P1-11)",
+                  "query": {
+                    "dataSourceId": "unity_catalog",
+                    "queryString": "SELECT explode(_quarantine_reason) AS reason, COUNT(*) AS cnt FROM industrial_ai.silver.quarantine_telemetry_events WHERE _ingested_at >= now() - INTERVAL 7 DAYS GROUP BY 1 ORDER BY 2 DESC",
+                    "fields": ["reason", "cnt"]
+                  },
+                  "visualization": {
+                    "type": "BAR",
+                    "x": "reason",
+                    "y": "cnt"
+                  }
+                },
+                {
+                  "name": "ml_job_status",
+                  "title": "ML Job Run Status — Last 7 Days",
+                  "description": "Isolation Forest and Cloud Forest training/evaluation outcomes",
+                  "query": {
+                    "dataSourceId": "unity_catalog",
+                    "queryString": "SELECT job_name, run_date, result_state FROM system.lakeflow.job_run_timeline WHERE job_name IN ('Bearing Isolation Forest', 'Cloud Forest') AND run_date >= current_date() - 7 ORDER BY run_date DESC",
+                    "fields": ["job_name", "run_date", "result_state"]
+                  },
+                  "visualization": {
+                    "type": "TABLE"
+                  }
+                }
+              ]
+            }
+          ]
+        }

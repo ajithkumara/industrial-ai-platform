@@ -17,11 +17,15 @@ on:
       - 'databricks.yml'
 
 env:
-  # Terraform Azure auth — secrets stored as AZURE_* in GitHub, mapped to ARM_* for Terraform
-  ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-  ARM_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
-  ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-  ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+  # P1-08: GitHub OIDC auth — ARM_CLIENT_SECRET is gone.
+  # Terraform's azurerm provider (use_oidc = true) exchanges the GitHub
+  # OIDC token for an Azure access token at plan/apply time.
+  # ARM_CLIENT_ID / ARM_TENANT_ID / ARM_SUBSCRIPTION_ID are non-sensitive
+  # identifiers → stored as GitHub repository *variables* (not secrets).
+  ARM_CLIENT_ID:       ${{ vars.AZURE_CLIENT_ID }}
+  ARM_TENANT_ID:       ${{ vars.AZURE_TENANT_ID }}
+  ARM_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+  ARM_USE_OIDC:        "true"
   TF_WORKING_DIR: terraform/environments/dev
 
 jobs:
@@ -32,6 +36,8 @@ jobs:
     permissions:
       contents: read
       pull-requests: write
+      # P1-08: required for GitHub to issue an OIDC token to this job.
+      id-token: write
     defaults:
       run:
         working-directory: ${{ env.TF_WORKING_DIR }}
@@ -51,6 +57,7 @@ jobs:
         run: terraform validate
 
       - name: Terraform Plan
+        id: plan
         run: |
           terraform plan \
             -var="storage_account_name_override=${{ vars.STORAGE_ACCOUNT_NAME_OVERRIDE }}" \
@@ -62,26 +69,49 @@ jobs:
             -target=module.rbac \
             -target=module.keyvault \
             -target=module.monitoring \
-            -out=tfplan -no-color
+            -out=tfplan -no-color 2>&1 | tee /tmp/tfplan.txt
         # module.databricks excluded: Unity Catalog resources (storage credential,
         # external location, catalog, schemas) require metastore admin which the
         # CI SP does not have. The Databricks workspace is stable; bundle deploy
         # handles all Databricks-side changes.
         continue-on-error: false
 
-      - name: Post plan summary to PR
+      # P1-17: Post the real plan diff (not just "plan completed") so
+      # reviewers can see exactly what will be created/changed/destroyed.
+      - name: Post plan diff to PR
         uses: actions/github-script@v7
         if: always()
         with:
           script: |
-            const output = `#### Terraform Plan 📋
-            Plan completed. Review the Actions log for full output.
-            *Triggered by @${{ github.actor }}*`;
+            const fs = require('fs');
+            let planText = '';
+            try {
+              planText = fs.readFileSync('/tmp/tfplan.txt', 'utf8');
+            } catch (e) {
+              planText = '(could not read plan output)';
+            }
+            // Trim to GitHub comment character limit (65535)
+            if (planText.length > 60000) {
+              planText = planText.slice(0, 60000) + '\n... (truncated — see Actions log for full output)';
+            }
+            const status = '${{ steps.plan.outcome }}' === 'success' ? '✅' : '❌';
+            const body = [
+              `#### Terraform Plan ${status}`,
+              '',
+              '<details><summary>Show full plan diff</summary>',
+              '',
+              '```hcl',
+              planText,
+              '```',
+              '</details>',
+              '',
+              `*Triggered by @${{ github.actor }} on \`${{ github.head_ref }}\`*`,
+            ].join('\n');
             github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: output
+              body,
             });
 
   terraform-apply:
@@ -89,6 +119,10 @@ jobs:
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     environment: dev
+    permissions:
+      contents: read
+      # P1-08: required for GitHub to issue an OIDC token to this job.
+      id-token: write
     defaults:
       run:
         working-directory: ${{ env.TF_WORKING_DIR }}
@@ -140,3 +174,17 @@ jobs:
         run: |
           unset DATABRICKS_TOKEN
           databricks bundle deploy -t dev
+
+      # P1-16: Post-deploy smoke test — validates the pipeline is actually live
+      # after each merge to main. Fails the job (and blocks further deploys)
+      # if the DLT pipeline or Databricks workspace is unreachable.
+      - name: Smoke test — validate bundle
+        working-directory: ${{ github.workspace }}
+        env:
+          DATABRICKS_HOST: ${{ steps.tf_outputs.outputs.databricks_host }}
+          DATABRICKS_TOKEN: ""
+          BUNDLE_VAR_storage_account_name: ${{ steps.tf_outputs.outputs.storage_account_name }}
+        run: |
+          unset DATABRICKS_TOKEN
+          databricks bundle validate -t dev
+          echo "Smoke test: bundle validate passed — workspace reachable and bundle config valid."

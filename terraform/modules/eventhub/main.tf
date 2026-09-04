@@ -13,7 +13,7 @@ resource "azurerm_eventhub" "hub" {
   namespace_name      = azurerm_eventhub_namespace.ehns.name
   resource_group_name = var.resource_group_name
   partition_count     = 2
-  message_retention   = 1
+  message_retention   = 7  # P1-14: 7-day retention — minimum replay window for incident recovery
 }
 
 # Explicitly provision a custom consumer group

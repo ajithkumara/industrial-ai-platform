@@ -37,6 +37,12 @@ include:
   # rationale as cloud_forest.yml above. See
   # databricks/resources/jobs/bearing_isolation_forest.yml header comment.
   - databricks/resources/jobs/bearing_isolation_forest.yml
+  # P1-10: Weekly Delta OPTIMIZE/VACUUM maintenance job.
+  - databricks/resources/jobs/maintenance.yml
+  # P1-15: Daily MLflow model artifact backup job.
+  - databricks/resources/jobs/mlflow_backup.yml
+  # P1-12: Operational dashboard — Bronze throughput, Silver DQ, quarantine, ML job health.
+  - databricks/resources/dashboards/*.yml
 
 # PORTABILITY: the workspace host is NOT hardcoded here. The Databricks CLI
 # resolves it from the DATABRICKS_HOST environment variable (or a saved profile
