@@ -64,6 +64,11 @@ variables:
   storage_container:
     description: "ADLS Gen2 filesystem/container for the medallion lake."
     default: "datalake"
+  sql_warehouse_id:
+    description: >-
+      ID of the SQL warehouse backing the P1-12 operational dashboard.
+      Find it in Databricks → SQL Warehouses → <warehouse> → Connection details.
+      Only required when deploying the dashboard resource.
 
 targets:
   dev:

@@ -1,7 +1,7 @@
 resources:
   dashboards:
     industrial_ai_ops:
-      name: "Industrial AI Platform — Operational Dashboard"
+      display_name: "Industrial AI Platform — Operational Dashboard"
       # P1-12: Minimal operational dashboard.
       # Covers the four key operational signals that an on-call engineer
       # needs at a glance: ingestion throughput, Silver DQ pass rate,
@@ -11,6 +11,8 @@ resources:
       # The dashboard auto-refreshes every 5 minutes in Databricks.
 
       warehouse_id: "${var.sql_warehouse_id}"
+      # sql_warehouse_id is declared in databricks.yml — set it via:
+      #   databricks bundle deploy -t dev -var="sql_warehouse_id=<warehouse-id>"
 
       serialized_dashboard: |
         {
