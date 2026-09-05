@@ -19,6 +19,10 @@ resources:
   jobs:
     cloud_forest_train:
       name: "CloudForest — Train Cloud Validation Model"
+      # P0-04: Alert on failure so a broken training run is not silently ignored.
+      email_notifications:
+        on_failure:
+          - aakumara@gmail.com
       environments:
         - environment_key: serverless
           spec:
@@ -38,6 +42,11 @@ resources:
 
     cloud_forest_score_escalations:
       name: "CloudForest — Score HYBRID Escalations"
+      # P0-04: Alert on failure. This job runs every 15 min; a silent failure
+      # means escalations go un-scored without any operator notification.
+      email_notifications:
+        on_failure:
+          - aakumara@gmail.com
       environments:
         - environment_key: serverless
           spec:

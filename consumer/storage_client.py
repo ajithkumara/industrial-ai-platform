@@ -12,7 +12,8 @@ from __future__ import annotations
 import json
 import logging
 import uuid
-from datetime import UTC, datetime
+from datetime import datetime, timezone
+UTC = timezone.utc  # compat: datetime.UTC was added in Python 3.11
 from pathlib import PurePosixPath
 from typing import Final
 
